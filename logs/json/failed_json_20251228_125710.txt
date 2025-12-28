@@ -1,0 +1,59 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "大埔火灾触发建筑安全审查，地产及消防产业链受冲击",
+  "summary": "香港大埔火灾导致44人遇难，特首李家超要求全港排查大型维修屋苑。事件可能加速建筑安全立法，短期冲击地产销售并利好安防设备供应商，需关注政策传导路径及保险赔付风险。",
+  "transmission_chain": [
+    {
+      "node_name": "建筑安全审查升级",
+      "impact_type": "利空",
+      "logic": "政府强制排查存在消防隐患的维修项目，可能导致全港建筑工地短期停工整顿，直接影响建筑公司Q4工程交付进度及现金流"
+    },
+    {
+      "node_name": "消防设备需求激增",
+      "impact_type": "利好",
+      "logic": "事故暴露老旧小区消防设施不足，政府或强制升级烟雾报警器/灭火系统，利好中航科电(00003.HK)等消防设备供应商"
+    },
+    {
+      "node_name": "地产估值承压",
+      "impact_type": "利空",
+      "logic": "事故削弱居民对老旧住宅信心，大埔区域房产交易量或冻结，叠加潜在房产税改革压力，开发商土储价值面临重估风险"
+    }
+  ],
+  "sentiment_score": 0.3,
+  "confidence": 0.7,
+  "intensity": 3,
+  "expectation_gap": 0.6,
+  "timeliness": 0.9,
+  "expected_horizon": "T+3",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "03311.HK",
+      "name": "中国建筑国际",
+      "reason": "港股最大建筑承包商，持有大量香港公屋项目订单，安全审查或致项目延期",
+      "recent_performance": "近30日下跌5.2%，跑输恒生指数3.8个百分点"
+    },
+    {
+      "ticker": "00003.HK",
+      "name": "中航科电",
+      "reason": "港股消防设备龙头，市占率超20%，政策加码有望带动订单增长",
+      "recent_performance": "近30日横盘，技术面形成双底形态"
+    },
+    {
+      "ticker": "00012.HK",
+      "name": "恒基地产",
+      "reason": "持有大埔区域大量住宅及商业物业，事故或引发租金收入下降预期",
+      "recent_performance": "近30日下跌7.1%，创2020年以来新低"
+    }
+  ],
+  "industry_tags": ["建筑施工", "房地产", "公共安全", "保险"],
+  "sources": [
+    {
+      "title": "香港大埔火灾已造成44人遇难,45人受伤,李家超最新发声→",
+      "url": "https://www.sohu.com/news/fire_in_hong_kong",
+      "source_name": "搜狐新闻"
+    }
+  ]
+}
+```

@@ -1,0 +1,63 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾引建筑安全审查，防火材料及检测行业或受益",
+  "summary": "香港大埔火灾暴露建筑外墙防火材料隐患，政府启动全港安全巡查及刑事调查。事件将加速建筑防火标准升级，推动阻燃材料替换需求，同时强化公共安全检测产业链。涉事企业面临法律风险，消防设备商关注度提升。",
+  "transmission_chain": [
+    {
+      "node_name": "建筑防火材料替换",
+      "impact_type": "利好",
+      "logic": "火灾因外墙保护网及发泡胶易燃性引发，预计政府将强制更新防火材料标准，港股阻燃材料供应商（如中国消防（0445.HK）旗下材料公司）需求激增"
+    },
+    {
+      "node_name": "建筑工程检测",
+      "impact_type": "利好",
+      "logic": "政府宣布全面巡查维修中屋苑，第三方检测机构（如华建集团（3993.HK））业务量将显著增加"
+    },
+    {
+      "node_name": "涉事建筑商及供应商",
+      "impact_type": "利空",
+      "logic": "涉事宏业建筑工程及山东化纤绳网公司面临司法追责，港股本地建筑股（如中国建筑国际（3311.HK））短期承压"
+    },
+    {
+      "node_name": "消防设备供应商",
+      "impact_type": "利好",
+      "logic": "高层建筑灭火难度暴露装备短板，无人机灭火系统（如亿航智能（EH.US））及高层救援设备需求预期提升"
+    }
+  ],
+  "sentiment_score": -0.35,
+  "confidence": 0.75,
+  "intensity": 5,
+  "expectation_gap": 0.6,
+  "timeliness": 0.95,
+  "expected_horizon": "T+5",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "0445.HK",
+      "name": "中国消防",
+      "reason": "主营防火材料及消防设备，直接受益于建筑防火标准升级",
+      "recent_performance": "近30日下跌4.2%，跑输恒生指数"
+    },
+    {
+      "ticker": "3993.HK",
+      "name": "华建集团",
+      "reason": "全国性建设工程检测龙头，或承接政府专项检查业务",
+      "recent_performance": "近30日横盘，换手率低迷"
+    }
+  ],
+  "industry_tags": ["建筑安全", "防火材料", "公共安全", "消防设备"],
+  "sources": [
+    {
+      "title": "香港大埔火灾致44人遇难，消防隐患引发行业整顿",
+      "url": "https://www.chinanews.com/hk/2025/1127/1078232.shtml",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "大埔火灾疑因建材不合规，港股建筑板块承压",
+      "url": "https://www.bjnews.com.cn/detail/1732762025726.html",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

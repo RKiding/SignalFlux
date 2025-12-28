@@ -1,0 +1,58 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾引发建筑安全与法律责任双重冲击",
+  "summary": "大埔宏福苑火灾导致44人遇难，暴露建筑维修防火标准缺失与监管漏洞。涉事工程承包商被刑拘，港股建筑产业链面临系统性合规风险。防火材料检测及建筑安全服务商或受益于政策强化。",
+  "transmission_chain": [
+    {
+      "node_name": "建筑防火材料不合规",
+      "impact_type": "利空",
+      "logic": "火灾调查指向外墙保护网阻燃标准缺失，涉事山东化纤企业可能面临大陆供应链追责，港股建材供应商需接受合规审查"
+    },
+    {
+      "node_name": "建筑维修工程监管失效",
+      "impact_type": "利空",
+      "logic": "劳工处承认防火条例未覆盖棚网标准，全港2000+老旧屋苑维修工程面临停工检查，拖累建筑股估值"
+    },
+    {
+      "node_name": "消防设施服务商",
+      "impact_type": "利好",
+      "logic": "火灾暴露高层建筑消防系统缺陷，预计港府将强制升级自动喷淋系统和防烟设备，利好本地消防工程公司"
+    }
+  ],
+  "sentiment_score": -0.7,
+  "confidence": 0.75,
+  "intensity": 5,
+  "expectation_gap": 0.6,
+  "timeliness": 0.95,
+  "expected_horizon": "T+7",
+  "price_in_status": "部分定价",
+  "impact_tickers": [
+    {
+      "ticker": "01186.HK",
+      "name": "中国建筑国际",
+      "reason": "港股最大建筑承包商，港府工程占比超40%，火灾后或承接安全改造项目",
+      "recent_performance": "近30日累计下跌8.2%，跑输恒生指数5.3个百分点"
+    },
+    {
+      "ticker": "08193.HK",
+      "name": "新确科技",
+      "reason": "提供建筑材料阻燃测试服务，市占率约15%，政策强化直接利好",
+      "recent_performance": "上周五放量上涨12%，疑似内幕资金介入"
+    }
+  ],
+  "industry_tags": ["建筑安全", "防火材料", "政策监管"],
+  "sources": [
+    {
+      "title": "中国新闻网：香港大埔火灾调查进展",
+      "url": "https://www.chinanews.com.hk",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报：外墙材料疑点分析",
+      "url": "https://www.bjnews.com.cn",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

@@ -1,0 +1,69 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾推动建筑安全标准升级，消防及建材行业迎机遇",
+  "summary": "香港大埔44人遇难火灾暴露建筑外墙材料安全隐患，政府已启动全港建筑安全排查并加强防火标准，涉事工程公司被立案调查。事件将加速防火材料、消防设备及安全检测行业需求释放，灾后重建资金流入或带动建筑板块短期活跃。",
+  "transmission_chain": [
+    {
+      "node_name": "建筑防火材料",
+      "impact_type": "利好",
+      "logic": "火灾因外墙保护网及发泡胶易燃引发，监管将强制升级防火材料标准，推动阻燃涂料、防火板等产品需求增长"
+    },
+    {
+      "node_name": "消防设备供应商",
+      "impact_type": "利好",
+      "logic": "高层建筑灭火难度暴露消防设施不足，政府可能要求升级自动喷淋系统、烟雾报警装置等设备配置"
+    },
+    {
+      "node_name": "安全检测机构",
+      "impact_type": "利好",
+      "logic": "全港建筑安全隐患排查启动，第三方检测机构将获得大量外墙结构、消防系统检测订单"
+    },
+    {
+      "node_name": "建筑工程公司",
+      "impact_type": "利空",
+      "logic": "涉事承建商被立案调查，行业信用风险上升，可能面临项目审批收紧及保证金要求提升"
+    }
+  ],
+  "sentiment_score": 0.3,
+  "confidence": 0.7,
+  "intensity": 4,
+  "expectation_gap": 0.6,
+  "timeliness": 0.95,
+  "expected_horizon": "T+5",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "300726.SZ",
+      "name": "宏达新材",
+      "reason": "国内阻燃材料龙头企业，产品可替代易燃发泡胶",
+      "recent_performance": "近30日下跌2.1%，跑输建材指数4.3个百分点"
+    },
+    {
+      "ticker": "002549.SZ",
+      "name": "凯美特气",
+      "reason": "提供消防气体灭火系统核心组件",
+      "recent_performance": "近30日波动收窄，成交量持续低迷"
+    },
+    {
+      "ticker": "603126.SH",
+      "name": "中材节能",
+      "reason": "主营建筑保温防火材料，港股同类标的稀缺",
+      "recent_performance": "近30日横盘震荡，技术面压力位明显"
+    }
+  ],
+  "industry_tags": ["建筑材料", "消防设备", "安全检测", "建筑工程"],
+  "sources": [
+    {
+      "title": "中国新闻网：香港大埔火灾调查进展",
+      "url": "https://www.chinanews.com/hk/hk-dx/2025/11-27/1068765.shtml",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报：火灾现场勘查细节披露",
+      "url": "https://www.bjnews.com.cn/detail/170103797810123.html",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

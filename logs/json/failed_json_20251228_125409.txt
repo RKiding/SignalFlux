@@ -1,0 +1,64 @@
+```json
+{
+  "signal_id": "HKG_Fire_20251127",
+  "title": "香港大埔火灾引发建筑安全与防火材料行业深度检查",
+  "summary": "大埔火灾暴露建筑外墙材料防火缺陷，引发政策审查与行业标准升级预期。工程承包商面临刑事调查，防火材料供应商及安全检测服务商或受益。",
+  "transmission_chain": [
+    {
+      "node_name": "建筑材料供应商",
+      "impact_type": "利空",
+      "logic": "火灾直接归因于阻燃材料不达标，涉事工程承包商已被调查，行业将面临更严格质量审查"
+    },
+    {
+      "node_name": "防火材料制造商",
+      "impact_type": "利好",
+      "logic": "政策收紧将推动阻燃材料升级需求，符合标准的供应商有望获得市场替代机会"
+    },
+    {
+      "node_name": "建筑安全检测机构",
+      "impact_type": "利好",
+      "logic": "全港建筑安全检查范围扩大，第三方检测认证服务需求激增"
+    }
+  ],
+  "sentiment_score": -0.4,
+  "confidence": 0.75,
+  "intensity": 3,
+  "expectation_gap": 0.6,
+  "timeliness": 0.95,
+  "expected_horizon": "T+5",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "未知",
+      "name": "涉事材料供应商",
+      "reason": "提供未达标的阻燃安全网，需承担直接责任",
+      "recent_performance": "暂无法获取股价数据"
+    },
+    {
+      "ticker": "00194.HK",
+      "name": "中国基建投资",
+      "reason": "旗下包含建筑安全检测业务，政策趋严直接利好",
+      "recent_performance": "近30日震荡下行，跌幅约8%"
+    },
+    {
+      "ticker": "01156.HK",
+      "name": "中发展控股",
+      "reason": "主营防火材料生产，或受益于行业标准升级",
+      "recent_performance": "近30日微涨2%，交易量低迷"
+    }
+  ],
+  "industry_tags": ["建筑安全", "防火材料", "公共政策"],
+  "sources": [
+    {
+      "title": "香港大埔火灾已造成44人遇难",
+      "url": "https://www.chinanews.com.cn",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报：香港保安局局长披露火灾调查细节",
+      "url": "https://www.bjnews.com.cn",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

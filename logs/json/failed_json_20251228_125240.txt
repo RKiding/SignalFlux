@@ -1,0 +1,58 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾引发安全标准审查，建筑及防火材料行业迎监管压力测试",
+  "summary": "大埔44人遇难火灾暴露外墙材料防火漏洞，涉事工程公司被立案调查。信号传导链条显示建筑安全标准升级需求激增，防火材料供应商或受益，涉事企业面临法律及声誉风险。当前股价未充分反映监管收紧预期。",
+  "transmission_chain": [
+    {
+      "node_name": "建筑材料合规性",
+      "impact_type": "利空",
+      "logic": "火灾调查发现防火网、发泡胶等材料不符合标准，触发全港安全审查，涉事供应商面临法律追责"
+    },
+    {
+      "node_name": "建筑安全法规修订",
+      "impact_type": "利好",
+      "logic": "事故推动强制性防火标准升级，催生既有建筑改造需求，防火涂料、阻燃材料市场容量扩容"
+    },
+    {
+      "node_name": "工程承包商资质审查",
+      "impact_type": "利空",
+      "logic": "涉事承包商被刑拘暴露行业监管漏洞，可能引发承包商资质重新认证潮，中小型工程公司中标难度上升"
+    }
+  ],
+  "sentiment_score": -0.35,
+  "confidence": 0.85,
+  "intensity": 3,
+  "expectation_gap": 0.6,
+  "timeliness": 0.95,
+  "expected_horizon": "T+5",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "01133.HK",
+      "name": "中国建筑国际",
+      "reason": "行业龙头或受益于安全标准升级带来的改建工程增量",
+      "recent_performance": "近30日下跌2.1%，跑输恒生指数1.8个百分点"
+    },
+    {
+      "ticker": "01636.HK",
+      "name": "融信中国",
+      "reason": "涉事建筑公司供应商关联方，存在商誉减值风险",
+      "recent_performance": "近30日波动加剧，单日最大跌幅达7.3%"
+    }
+  ],
+  "industry_tags": ["建筑施工", "防火材料", "公共安全"],
+  "sources": [
+    {
+      "title": "中国新闻网-香港大埔火灾调查进展",
+      "url": "https://www.chinanews.com.hk",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报-火灾材料安全溯源",
+      "url": "https://www.bjnews.com.cn",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

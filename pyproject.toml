@@ -4,4 +4,17 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "agno>=2.3.21",
+    "akshare>=1.18.3",
+    "baidusearch>=1.0.3",
+    "ddgs>=9.10.0",
+    "dotenv>=0.9.9",
+    "loguru>=0.7.3",
+    "markdown>=3.10",
+    "ollama>=0.6.1",
+    "openai>=2.14.0",
+    "pandas>=2.3.3",
+    "pycountry>=24.6.1",
+    "rank-bm25>=0.2.2",
+]

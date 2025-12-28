@@ -1,0 +1,53 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔重大火灾推动消防与建筑工程板块分化",
+  "summary": "大埔火灾44人遇难事件引发港府全港安全巡查，消防设备需求预期激增，建筑安全合规成本上升形成行业分化。事故调查可能催生强制性消防设施升级政策，短期提振安防设备商，中长期增加建筑企业运营成本。",
+  "transmission_chain": [
+    {
+      "node_name": "火灾事故",
+      "impact_type": "利空",
+      "logic": "人员伤亡和财产损失可能增加保险赔付压力，港股保险板块短期承压"
+    },
+    {
+      "node_name": "全港安全巡查",
+      "impact_type": "利好",
+      "logic": "消防设施检测与维护需求激增，利好本地消防设备供应商"
+    },
+    {
+      "node_name": "建筑安全升级",
+      "impact_type": "利空",
+      "logic": "建筑商面临强制性消防系统改造，增加资本开支压力"
+    }
+  ],
+  "sentiment_score": -0.3,
+  "confidence": 0.92,
+  "intensity": 5,
+  "expectation_gap": 0.65,
+  "timeliness": 0.95,
+  "expected_horizon": "T+3",
+  "price_in_status": "部分定价",
+  "impact_tickers": [
+    {
+      "ticker": "0445.HK",
+      "name": "中国消防",
+      "reason": "港股最大消防设备供应商，市占率超30%",
+      "recent_performance": "近30日上涨8.2%，事件后跳空高开4.5%"
+    },
+    {
+      "ticker": "3377.HK",
+      "name": "恒大地产",
+      "reason": "港岛在建项目需追加消防投入，增加开发成本",
+      "recent_performance": "近30日下跌2.1%，事件后放量下挫2.8%"
+    }
+  ],
+  "industry_tags": ["保险", "建筑工程", "公共事业"],
+  "sources": [
+    {
+      "title": "香港大埔火灾已造成44人遇难,45人受伤,李家超最新发声→",
+      "url": "https://www.sohu.com/a/123456789_123456",
+      "source_name": "搜狐网"
+    }
+  ]
+}
+```

@@ -1,0 +1,278 @@
+# src/prompts/report_agent.py
+from datetime import datetime
+
+# 1. 策划阶段 (Structural Planning)
+def get_cluster_planner_instructions(signals_text: str, user_query: str = None) -> str:
+    """生成信号聚类指令 - 将零散信号组织成逻辑主题"""
+    query_context = f"用户重点关注：{user_query}" if user_query else ""
+    return f"""你是一位资深的金融研报主编。你的任务是将以下零散的金融信号聚类成 3-5 个核心逻辑主题，以便撰写一份结构清晰的研报。
+    
+    {query_context}
+
+    ### 输入信号列表
+    {signals_text}
+
+    ### 聚类要求
+    1. **主题聚合**: 将相关性强的信号归为一组（例如：都涉及“建筑安全法规”或“某产业链上下游”）。
+    2. **叙事逻辑**: 只需要生成主题名称和包含的信号 ID。
+    3. **控制数量**: 将所有信号归类到 3-5 个主要主题中，不要遗漏。
+    
+    ### 输出格式 (JSON)
+    请仅输出以下 JSON 格式，不要包含 Markdown 标记：
+    {{
+        "clusters": [
+            {{
+                "theme_title": "主题名称（如：建筑安全法规收紧引发的产业链重构）",
+                "signal_ids": [1, 3, 5],
+                "rationale": "这些信号都指向政府对高层建筑防火标准的政策调整..."
+            }},
+            ...
+        ]
+    }}
+    """
+
+def get_report_planner_instructions(toc: str, signal_count: int, user_query: str = None) -> str:
+    """生成报告规划指令 - 重点在于逻辑关联与分歧识别"""
+    # ... (原有逻辑保持不变，但实际在新的聚类流程后这个可能作为备用或二次优化)
+    query_context = f"用户重点关注：{user_query}" if user_query else ""
+    return f"""你是一位资深的金融研报主编。你的任务是根据现有的草稿章节，规划出一份逻辑严密、穿透力强的终稿结构。
+    
+    ### 任务核心：
+    1. **识别主线**: 从草稿中识别出贯穿多个章节的“核心逻辑主线”（如：产业链共振、货币政策转向）。
+    2. **分歧评估 (Entropy)**: 识别各章节中观点冲突或确定性不一之处，规划如何在正文中呈现这些“分歧点”。
+    3. **结构蓝图**: 
+       - 定义一级标题（逻辑主题）。
+       - 归类章节：哪些信号应放入同一主题下深度解析？
+       - 排序：将 ISQ 强度最高、与{query_context}最相关的信号置前。
+
+    ### 现有草稿目录 (TOC)
+    {toc}
+
+    请输出你的【终稿修订大纲】（Markdown 格式）。
+    """
+
+# 2. 撰写阶段 (Section Writing)
+def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, signal_indices: list, price_context: str = "", user_query: str = None) -> str:
+    """生成 Writer Agent 指令 - 基于主题聚类撰写综合分析"""
+    
+    price_info = f"\n### 近期价格参考\n{price_context}\n" if price_context else ""
+    query_context = f"\n**用户意图**: \"{user_query}\"\n请确保分析内容回应了用户的关注点。\n" if user_query else ""
+    
+    # 生成引用标记列表供提示
+    refs_guide = ", ".join([f"[[{i}]]" for i in signal_indices])
+
+    return f"""你是一位资深金融分析师。请针对核心主题 **"{theme_title}"** 撰写一篇深度研报章节。
+    {query_context}
+
+    ### 输入信号集 (本章节需综合的信号)
+    {signal_cluster_text}
+    {price_info}
+    
+    ### 写作要求
+    1. **叙事逻辑**: 不要罗列信号，要将这些信号编织成一个连贯的故事。先讲宏观/行业背景，再讲具体事件传导，最后落脚到个股/标的影响。
+    2. **量化支撑**: 引用 ISQ 评分（确定性、强度、预期差）来佐证你的观点。
+    3. **引用规范**: 即使多个信号属于同一主题，也必须准确引用来源。使用 {refs_guide} 格式。
+    4. **关联标的预测**: **必须**在章节末尾明确给出受影响标的的预测分析，包括：
+       - 至少列出 1-2 个相关上市公司代码（如 600519.SH）
+       - 给出短期（T+3或T+5）的方向性判断
+       - 如果可能，给出预期价格区间或涨跌幅预测
+    
+    ### 【重要】标题层级规范
+    
+    ❌ **错误示例**（绝对不要这样）：
+    ```markdown
+    # {theme_title}
+    
+    ## 宏观背景
+    ...
+    ```
+    
+    ✅ **正确示例**（必须这样）：
+    ```markdown
+    ### {theme_title}
+    
+    #### 宏观背景
+    
+    近期全球经济环境...
+    
+    #### 具体传导机制分析
+    
+    ...
+    
+    #### 核心标的分析
+    
+    建议关注：贵州茅台（600519.SH）...
+    ```
+    
+    **关键要求**：
+    - 章节主标题使用 `###` (H3)
+    - 章节子标题使用 `####` (H4)
+    - **绝对禁止**使用 `#` (H1) 或 `##` (H2)
+    - 第一行必须是 `### {theme_title}` 开头
+
+    ### 核心：图表叙事 (Visual Storytelling)
+    **必须**在文中插入至少 1-2 个图表，且图表必须与上下文紧密结合（不要堆砌在末尾）。
+    
+    **可选图表类型 (请根据内容选择最合适的 1-2 种):**
+
+    **A. 股价趋势与预测 (Stock Trend) - 【强烈推荐】**
+    *适用*: 当文中明确提及某上市公司时，**必须**使用此图表展示股价走势和预测。
+    *必填字段*:
+    - `ticker`: 6位股票代码，如 "600519" 或带后缀 "600519.SH"
+    - `prediction`: 未来3-5日的预测价格数组
+    *代码示例*:
+    ```json-chart
+    {{"type": "stock", "ticker": "600519", "title": "贵州茅台趋势预测", "prediction": [1850, 1880, 1920]}}
+    ```
+    *注意*: 如果提及多只股票，应为每只生成独立的股价图表。
+
+    **B. 舆情情绪演变 (Sentiment Trend)**
+    *适用*: 当讨论行业政策、突发事件（如“火灾”、“新规”）的民意变化时。
+    *注意*: `keywords` 必须是事件核心词。
+    *代码*:
+    ```json-chart
+    {{"type": "sentiment", "keywords": ["建筑安全", "防火标准"], "title": "市场对防火新规的情绪演变"}}
+    ```
+
+    **C. 逻辑传导链条 (Transmission Chain)**
+    *适用*: 复杂的蝴蝶效应分析（支持分支结构）。
+    *代码*:
+    ```json-chart
+    {{
+      "type": "transmission",
+      "nodes": [
+        {{"node_name": "突发火灾", "impact_type": "中性", "logic": "事件发端"}},
+        {{"node_name": "监管收紧", "impact_type": "利空", "logic": "合规成本上升", "source": "突发火灾"}},
+        {{"node_name": "设备升级", "impact_type": "利好", "logic": "采购需求释放", "source": "突发火灾"}},
+        {{"node_name": "龙头受益", "impact_type": "利好", "logic": "市占率提升", "source": "设备升级"}}
+      ],
+      "title": "火灾事件的逻辑传导与分支"
+    }}
+    ```
+    *说明*: 使用 `source` 字段指定父节点名称以创建分支结构。
+    
+    **D. 信号质量评估 (ISQ Radar)**
+    *适用*: 对某个关键信号进行多维度（确定性、预期差等）定性评估时。
+    *代码*:
+    ```json-chart
+    {{"type": "isq", "sentiment": 0.8, "confidence": 0.9, "intensity": 4, "expectation_gap": 0.7, "timeliness": 0.9, "title": "核心信号质量评估"}}
+    ```
+    """
+
+# 3. 整合阶段 (Final Assembly) - 原版，保留用于 fallback
+def get_report_editor_instructions(draft_sections: str, plan: str, sources_list: str) -> str:
+    """生成最终编辑指令 - 根据规划蓝图重组内容"""
+    return f"""你是一位专业的研报编辑。请将以下基于主题撰写的草稿章节整合成最终研报。
+    
+    ### 原始草稿内容
+    {draft_sections}
+
+    ### 原始引用来源
+    {sources_list}
+
+    ### 任务与要求
+    1. **结构化**: 为每个草稿章节添加合适的 Markdown 标题 (### 级别)。
+    2. **连贯性**: 确保章节之间过渡自然。
+    3. **完整性**:
+       - 必须保留所有 `json-chart` 代码块（图表配置）。
+       - 必须保留引用标注 `[[编号]]`。
+       - 生成 `## 核心观点摘要`、`## 参考文献` 和 `## 风险提示`。
+
+    ### 输出
+    只输出最终的 Markdown 研报内容。
+    """
+
+
+# 4. 单节编辑 (Incremental Section Editing with RAG)
+def get_section_editor_instructions(section_index: int, total_sections: int, toc: str) -> str:
+    """生成单节编辑 prompt，支持 RAG 工具调用"""
+    return f"""你是一位研报编辑。你正在编辑报告的第 {section_index}/{total_sections} 节。
+
+    ### 当前目录 (TOC)
+    {toc}
+
+    ### 你的任务
+    1. 润色当前章节内容，确保逻辑清晰、语言专业。
+    2. 保留所有 `[[编号]](#ref编号)` 格式的引用。
+    3. 保留所有 `json-chart` 代码块，不做修改。
+    4. 如果需要参考其他章节内容，使用 `search_context` 工具搜索。
+    5. 只输出编辑后的章节内容，不要输出其他章节。
+    
+    ### 【关键】标题层级规范
+    **严格遵守以下规则：**
+    - 章节主标题使用 `###` (H3)
+    - 章节子标题使用 `####` (H4)
+    - **禁止使用** `#` (H1) 或 `##` (H2) - 这些是报告框架级别的标题
+    - 如果原文中有 H1/H2，必须将其降级为 H3/H4
+    - 不要输出与 "核心观点摘要"、"参考文献"、"风险提示" 相同的标题
+
+    直接输出编辑后的 Markdown 内容。
+    """
+
+
+# 5. 摘要生成 (Summary Generation)
+def get_summary_generator_instructions(toc: str, section_summaries: str) -> str:
+    """生成报告摘要指令 - 包含市场分歧度分析"""
+    return f"""你是一位资深研报主笔。请生成今日报告的核心观点摘要的**正文内容**。
+
+    ### 章节摘要
+    {section_summaries}
+
+    ### 任务：
+    1. **核心逻辑提炼**: 用 150 字以内总结今日最核心的投资主线。
+    2. **分歧识别**: 如果不同信号对同一板块有冲突观点，请明确指出"市场分歧点"。
+    3. **确定性排序**: 标记出今日确定性最高的前两个机会（需列出具体标的代码）。
+
+    ### 【重要】输出格式规范：
+    
+    ❌ **错误示例**（不要这样输出）：
+    ```markdown
+    ## 核心观点摘要
+    
+    ### 核心逻辑提炼
+    ...
+    ```
+    
+    ✅ **正确示例**（应该这样输出）：
+    ```markdown
+    ### 核心逻辑提炼
+    
+    科技自立战略加速半导体设备国产化，叠加AI算力需求爆发...
+    
+    ### 市场分歧点
+    
+    资本市场波动显示医药、新能源等板块估值逻辑受政策敏感性增强...
+    
+    ### 确定性排序
+    
+    1. **网络安全替代需求**（ISQ确定性0.85，推荐标的：深信服 300454.SZ）
+    2. **半导体设备材料**（ISQ确定性0.75，推荐标的：北方华创 002371.SZ）
+    ```
+    
+    ### 关键要求：
+    - 第一行必须是 `###` 开头的子标题，**绝对不要**输出 `## 核心观点摘要`
+    - 只使用 H3 (`###`) 和 H4 (`####`) 级别标题
+    - 直接输出正文内容，外层框架会自动添加 `## 核心观点摘要` 标题
+    
+    现在请按照正确示例的格式输出摘要内容。
+    """
+
+
+# 6. 最终组装 (Final Assembly with Sections)
+def get_final_assembly_instructions(sources_list: str) -> str:
+    """生成最终报告组装的 prompt"""
+    return f"""你是一位研报主笔。请完成以下任务：
+
+    ### 任务
+    1. 生成 "## 参考文献" 章节：
+    - 原始来源：
+    {sources_list}
+    - 格式：`<a id="ref编号"></a>[编号] 标题 (来源), [链接地址]`
+    2. 生成 "## 风险提示" (标准免责声明)。
+    3. 生成 "## 快速扫描" 表格，汇总各主题的核心观点。
+    - 表格列：**主题**, **核心观点**, **强度(Intensity)**, **确定性(Confidence)**。
+    - 强度和确定性请参考原章节中的 ISQ 评分。
+
+    只输出上述三个章节的 Markdown 内容。
+    """
+

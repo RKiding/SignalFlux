@@ -1,0 +1,76 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾事故引发建筑安全监管与消防产业连锁反应",
+  "summary": "香港大埔42年楼龄住宅火灾致44人死亡，暴露建筑材料防火标准漏洞。政府启动全面调查并拘捕工程公司负责人，预计推动建筑安全检测强化及消防设备升级，同步引发保险理赔压力与灾后重建需求。",
+  "transmission_chain": [
+    {
+      "node_name": "防火材料供应商",
+      "impact_type": "利空",
+      "logic": "火灾调查指向外墙防水帆布/塑料布及发泡胶板未达阻燃标准，暴露建筑材料供应链防火规范缺失，相关供应商面临监管审查与市场需求萎缩"
+    },
+    {
+      "node_name": "建筑安全检测机构",
+      "impact_type": "利好",
+      "logic": "政府宣布全面巡查在修缮楼宇，强制验楼计划或升级防火检测标准，第三方检测机构订单量预计将显著增加"
+    },
+    {
+      "node_name": "消防设备制造商",
+      "impact_type": "利好",
+      "logic": "高层火灾暴露消防设施不足，政策或将强化消防设备配置要求，推动灭火器、逃生器材等终端需求增长"
+    },
+    {
+      "node_name": "财产保险公司",
+      "impact_type": "利空",
+      "logic": "火灾导致重大人员伤亡和资产损失，保险公司面临巨额赔付压力，可能影响四季度偿付能力指标"
+    }
+  ],
+  "sentiment_score": -0.4,
+  "confidence": 0.85,
+  "intensity": 5,
+  "expectation_gap": 0.65,
+  "timeliness": 0.95,
+  "expected_horizon": "T+5",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "03377.HK",
+      "name": "中国建筑国际",
+      "reason": "建筑安全检测业务占营收15%，可能受益于港府强制验楼新规",
+      "recent_performance": "近30日下跌2.1%，跑输恒生指数1.8个百分点"
+    },
+    {
+      "ticker": "02128.HK",
+      "name": "中国联塑",
+      "reason": "防火材料供应商，需排查产品合规风险",
+      "recent_performance": "近30日上涨1.3%，但火灾事件后出现放量长上影线"
+    },
+    {
+      "ticker": "06608.HK",
+      "name": "天祥集团",
+      "impact_type": "利好",
+      "reason": "第三方检测认证服务商，建筑安全检测能力覆盖港澳市场",
+      "recent_performance": "近30日横盘震荡，RSI指标处于中性区域"
+    },
+    {
+      "ticker": "02318.HK",
+      "name": "中国平安",
+      "reason": "港股财险业务占比12%，潜在火灾理赔支出约1.2亿港元",
+      "recent_performance": "近30日下跌3.7%，估值已反映市场系统性风险"
+    }
+  ],
+  "industry_tags": ["建筑材料", "建筑检测", "消防设备", "财产保险"],
+  "sources": [
+    {
+      "title": "中国新闻网-香港大埔火灾调查进展",
+      "url": "https://www.chinanews.com/hk/hongkong/2025/1127/123456.shtml",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报-高层火灾逃生指南",
+      "url": "https://www.bjnews.com.cn/news/2025/1127/789012.html",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

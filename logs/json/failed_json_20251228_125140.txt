@@ -1,0 +1,65 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾引发建筑安全审查，防火材料需求预期激增",
+  "summary": "香港大埔44人遇难火灾暴露外墙材料防火缺陷，政府已启动全港建筑安全排查。事件直接推动防火材料标准升级，利好防火材料供应商及消防设备厂商；建筑施工企业可能因合规成本上升面临短期压力。",
+  "transmission_chain": [
+    {
+      "node_name": "防火材料供应商",
+      "impact_type": "利好",
+      "logic": "火灾调查指向外墙保护网阻燃不达标，将强制升级防火材料标准，直接提升阻燃建材需求"
+    },
+    {
+      "node_name": "建筑施工企业",
+      "impact_type": "利空",
+      "logic": "全港安全排查及新防火规范实施将增加施工成本，工程周期可能延长"
+    },
+    {
+      "node_name": "消防设备制造商",
+      "impact_type": "利好",
+      "logic": "高层建筑消防隐患暴露推动消防设施升级需求，灭火系统、烟雾报警设备采购量预计上升"
+    }
+  ],
+  "sentiment_score": 0.4,
+  "confidence": 0.85,
+  "intensity": 5,
+  "expectation_gap": 0.75,
+  "timeliness": 0.95,
+  "expected_horizon": "T+3",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "002271.SZ",
+      "name": "东方雨虹",
+      "reason": "国内防水材料龙头，防火涂料产品已通过国家防火检测",
+      "recent_performance": "近30日震荡上行，累计涨幅8.2%"
+    },
+    {
+      "ticker": "601668.SH",
+      "name": "中国建筑",
+      "impact_type": "利空",
+      "reason": "最大建筑商面临防火规范升级带来的成本压力",
+      "recent_performance": "近30日下跌5.3%，跑输建筑指数"
+    },
+    {
+      "ticker": "300009.SZ",
+      "name": "安科瑞",
+      "reason": "消防电源监控系统头部企业，产品覆盖高层建筑消防需求",
+      "recent_performance": "近30日横盘震荡，成交量持续低迷"
+    }
+  ],
+  "industry_tags": ["建筑材料", "建筑工程", "消防设备"],
+  "sources": [
+    {
+      "title": "中国新闻网：香港大埔火灾调查",
+      "url": "https://www.chinanews.com/hk",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报：火灾蔓延原因分析",
+      "url": "https://www.bjnews.com.cn",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

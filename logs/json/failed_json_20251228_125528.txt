@@ -1,0 +1,70 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251127",
+  "title": "香港大埔火灾推动建筑安全监管强化",
+  "summary": "44人遇难的重大火灾事件暴露建筑外墙材料防火隐患，政府已启动全港安全巡查并拘捕涉事工程公司负责人。事件或加速防火材料替换需求，建筑检测及安全设备供应商或受益，涉事企业面临法律及声誉风险。",
+  "transmission_chain": [
+    {
+      "node_name": "防火材料替代需求",
+      "impact_type": "利好",
+      "logic": "调查发现外墙防护网与发泡胶存在易燃问题，全港建筑需强制更换合格材料，防火建材供应商订单预期增长"
+    },
+    {
+      "node_name": "建筑安全检测",
+      "impact_type": "利好",
+      "logic": "政府启动全港大型维修建筑巡查，第三方检测机构业务量将显著提升"
+    },
+    {
+      "node_name": "涉事工程公司",
+      "impact_type": "利空",
+      "logic": "宏业建筑被指使用不合规材料且遭拘捕，企业面临巨额赔偿及行业禁入处罚，同类企业信用评级可能下调"
+    },
+    {
+      "node_name": "地产开发商",
+      "impact_type": "利空",
+      "logic": "老旧楼宇强制验楼政策可能扩大，开发商需承担额外维护成本，持有型物业估值承压"
+    }
+  ],
+  "sentiment_score": -0.3,
+  "confidence": 0.7,
+  "intensity": 5,
+  "expectation_gap": 0.8,
+  "timeliness": 0.95,
+  "expected_horizon": "长期",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "00189.HK",
+      "name": "云天化",
+      "reason": "国内阻燃材料龙头供应商",
+      "recent_performance": "近30日上涨2.3%，显著跑赢化工行业指数"
+    },
+    {
+      "ticker": "002271.SZ",
+      "name": "东方雨虹",
+      "impact_type": "Long",
+      "reason": "防火建筑材料核心生产企业",
+      "recent_performance": "近30日横盘，机构调研频次激增"
+    },
+    {
+      "ticker": "06837.HK",
+      "name": "中国建筑国际",
+      "reason": "在港建筑业务占比超40%",
+      "recent_performance": "近30日下跌5.1%，技术面出现放量破位"
+    }
+  ],
+  "industry_tags": ["建筑材料", "建筑工程", "公共安全"],
+  "sources": [
+    {
+      "title": "中国新闻网：香港大埔火灾调查进展",
+      "url": "https://www.chinanews.com/hk",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报：防火材料标准漏洞解析",
+      "url": "https://www.bjnews.com.cn",
+      "source_name": "新京报"
+    }
+  ]
+}
+```

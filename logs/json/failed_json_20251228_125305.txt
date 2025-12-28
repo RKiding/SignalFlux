@@ -1,0 +1,63 @@
+```json
+{
+  "signal_id": "HK_FIRE_20251126",
+  "title": "香港大埔火灾引发建筑安全及消防产业连锁反应",
+  "summary": "大埔宏福苑火灾暴露建筑安全材料隐患，触发政府政策收紧及全港排查，利好消防设备、楼宇检测及替代材料产业，利空涉事承包商关联企业。事件或引发港股建筑及公共安全板块短期波动。",
+  "transmission_chain": [
+    {
+      "node_name": "违规建材供应商",
+      "impact_type": "利空",
+      "logic": "火灾主因指向山东某化纤绳网公司提供的阻燃不合格防护网，涉事企业面临司法追责及行业禁入风险"
+    },
+    {
+      "node_name": "建筑检测机构",
+      "impact_type": "利好",
+      "logic": "政府强制验楼计划升级，滨州市检验检测中心等合规检测机构业务量预期激增"
+    },
+    {
+      "node_name": "防火材料替代厂商",
+      "impact_type": "利好",
+      "logic": "港府将强制替换违规建材，阻燃密目网、防火涂料等替代产品需求短期爆发，利好三棵树、东方雨虹等供应商"
+    },
+    {
+      "node_name": "消防应急产业",
+      "impact_type": "利好",
+      "logic": "高层火灾暴露消防设施短板，烟雾报警器、缓降器等终端设备采购需求提升，海康威视、青鸟消防或受益"
+    }
+  ],
+  "sentiment_score": -0.3,
+  "confidence": 0.85,
+  "intensity": 5,
+  "expectation_gap": 0.6,
+  "timeliness": 0.95,
+  "expected_horizon": "T+3",
+  "price_in_status": "未定价",
+  "impact_tickers": [
+    {
+      "ticker": "00151.HK",
+      "name": "中国东方集团",
+      "reason": "旗下津西钢铁为港股防火钢材核心供应商，火灾后防火建材需求预期上升",
+      "recent_performance": "近30日累计上涨2.1%，量能未见明显异动"
+    },
+    {
+      "ticker": "603669.SH",
+      "name": "灵康药业",
+      "reason": "控股子公司生产烧伤科用药，灾后医疗救援物资采购或受益",
+      "recent_performance": "近30日下跌4.7%，技术面处于箱体震荡低位"
+    }
+  ],
+  "industry_tags": ["建筑安全", "消防装备", "公共管理"],
+  "sources": [
+    {
+      "title": "中国新闻网",
+      "url": "https://www.chinanews.com",
+      "source_name": "中国新闻网"
+    },
+    {
+      "title": "新京报",
+      "url": "https://www.bjnews.com.cn",
+      "source_name": "新京报"
+    }
+  ]
+}
+```
