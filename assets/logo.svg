@@ -1,0 +1,36 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="signalGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:1" /> <!-- Cyan -->
+      <stop offset="100%" style="stop-color:#f59e0b;stop-opacity:1" /> <!-- Amber -->
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="200" height="200" rx="40" fill="#0f172a" />
+
+  <!-- Data Stream (Noise) -->
+  <path d="M40 60 Q 70 50, 100 60 T 160 60" fill="none" stroke="#334155" stroke-width="2" />
+  <path d="M40 80 Q 70 90, 100 80 T 160 80" fill="none" stroke="#334155" stroke-width="2" />
+  <path d="M40 140 Q 70 130, 100 140 T 160 140" fill="none" stroke="#334155" stroke-width="2" />
+  
+  <!-- The Signal (Pulse) -->
+  <path d="M40 110 Q 70 110, 85 110 L 95 85 L 105 135 L 115 110 Q 130 110, 160 110" 
+        fill="none" 
+        stroke="url(#signalGradient)" 
+        stroke-width="5" 
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        filter="url(#glow)" />
+        
+  <!-- Abstract "Eye/Radar" Circle hint -->
+  <circle cx="100" cy="110" r="30" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1" fill="none"/>
+
+</svg>

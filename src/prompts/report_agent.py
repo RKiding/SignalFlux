@@ -1,7 +1,54 @@
 # src/prompts/report_agent.py
 from datetime import datetime
+from .isq_prompt_generator import generate_isq_prompt_section
+
+def get_report_planner_base_instructions() -> str:
+    """生成报告策划员 (Planner) 的基础系统指令"""
+    return """你是一名资深的金融研报主编。你的任务是规划报告的结构，将零散的信号聚类成有逻辑的主题。
+你拥有 RAG 搜索工具，可以检索已生成的章节内容以确保逻辑连贯性。
+在规划时，应重点关注信号之间的关联性、产业链的完整性以及用户特定的关注点。"""
+
+def get_report_writer_base_instructions() -> str:
+    """生成报告撰写员 (Writer) 的基础系统指令"""
+    return """你是一名资深金融分析师。你的任务是根据策划员提供的信号簇撰写深度研报章节。
+你应当运用专业的金融知识，将信号转化为深刻的洞察。
+注意：你没有外部搜索工具，你的分析必须基于提供给你的信号内容和行情数据。"""
+
+def get_report_editor_base_instructions() -> str:
+    """生成报告编辑 (Editor) 的基础系统指令"""
+    return """你是一名严谨的金融研报编辑。你的任务是审核和润色撰写员生成的章节。
+你拥有 RAG 搜索工具，可以检索其他章节的内容，以消除重复、修正逻辑冲突并确保术语一致性。
+你应当确保报告符合专业的金融写作规范，且标题层级正确。"""
 
 # 1. 策划阶段 (Structural Planning)
+def format_signal_for_report(signal: any, index: int) -> str:
+    """格式化单个信号供研报生成使用"""
+    # 这里的逻辑从 ReportAgent._format_signal_input 迁移过来
+    from schema.models import InvestmentSignal
+    
+    if isinstance(signal, dict):
+        try:
+            sig_obj = InvestmentSignal(**signal)
+        except:
+            return f"--- 信号 [{index}] ---\n标题: {signal.get('title')}\n内容: {signal.get('content', '')[:500]}"
+    else:
+        sig_obj = signal
+
+    chain_str = " -> ".join([f"{n.node_name}({n.impact_type})" for n in sig_obj.transmission_chain])
+    
+    text = f"--- 信号 [{index}] ---\n"
+    text += f"标题: {sig_obj.title}\n"
+    text += f"逻辑摘要: {sig_obj.summary}\n"
+    text += f"传导链条: {chain_str}\n"
+    text += f"ISQ 评分: 情绪({sig_obj.sentiment_score}), 确定性({sig_obj.confidence}), 强度({sig_obj.intensity})\n"
+    text += f"预期博弈: 时窗({sig_obj.expected_horizon}), 预期差({sig_obj.price_in_status})\n"
+    
+    tickers = ", ".join([f"{t.get('name')}({t.get('ticker')})" for t in sig_obj.impact_tickers])
+    if tickers:
+        text += f"受影响标的: {tickers}\n"
+        
+    return text
+
 def get_cluster_planner_instructions(signals_text: str, user_query: str = None) -> str:
     """生成信号聚类指令 - 将零散信号组织成逻辑主题"""
     query_context = f"用户重点关注：{user_query}" if user_query else ""
@@ -57,6 +104,7 @@ def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, s
     
     price_info = f"\n### 近期价格参考\n{price_context}\n" if price_context else ""
     query_context = f"\n**用户意图**: \"{user_query}\"\n请确保分析内容回应了用户的关注点。\n" if user_query else ""
+    isq_block = generate_isq_prompt_section(include_header=False)
     
     # 生成引用标记列表供提示
     refs_guide = ", ".join([f"[[{i}]]" for i in signal_indices])
@@ -68,9 +116,12 @@ def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, s
     {signal_cluster_text}
     {price_info}
     
+    ### ISQ 评分说明
+    {isq_block}
+    
     ### 写作要求
     1. **叙事逻辑**: 不要罗列信号，要将这些信号编织成一个连贯的故事。先讲宏观/行业背景，再讲具体事件传导，最后落脚到个股/标的影响。
-    2. **量化支撑**: 引用 ISQ 评分（确定性、强度、预期差）来佐证你的观点。
+    2. **量化支撑**: 引用 ISQ 评分（确定性、强度、预期差）来佐证你的观点。关键观点必须关联相应的 ISQ 分值。
     3. **引用规范**: 即使多个信号属于同一主题，也必须准确引用来源。使用 {refs_guide} 格式。
     4. **关联标的预测**: **必须**在章节末尾明确给出受影响标的的预测分析，包括：
        - 至少列出 1-2 个相关上市公司代码（如 600519.SH）
@@ -82,6 +133,36 @@ def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, s
     ❌ **错误示例**（绝对不要这样）：
     ```markdown
     # {theme_title}
+    
+    ### 宏观背景
+    ...
+    ```
+    
+    ✅ **正确示例**（必须这样）：
+    ```markdown
+    ## {theme_title}
+    
+    ### 宏观背景
+    
+    近期全球经济环境...
+    
+    ### 具体传导机制分析
+    
+    ...
+    
+    ### 核心标的分析
+    
+    建议关注：贵州茅台（600519.SH）...
+    ```
+    
+    **关键要求**：
+    - 章节主标题使用 `##` (H2)
+    - 章节子标题使用 `###` (H3)
+    - **绝对禁止**使用 `#` (H1)
+    - 第一行必须是 `## {theme_title}` 开头
+
+    ### 核心：图表叙事 (Visual Storytelling)
+    **必须**在文中插入至少 1-2 个图表，且图表必须与上下文紧密结合（不要堆砌在末尾）。
     
     ### 宏观背景
     ...
@@ -275,4 +356,20 @@ def get_final_assembly_instructions(sources_list: str) -> str:
 
     只输出上述三个章节的 Markdown 内容。
     """
+
+def get_cluster_task(signals_preview: str) -> str:
+    """生成聚类任务描述"""
+    return f"请对以下信号进行主题聚类：\n\n{signals_preview}"
+
+def get_writer_task(theme_title: str) -> str:
+    """生成撰写任务描述"""
+    return f"请依据主题 '{theme_title}' 和 输入信号集 开始撰写深度分析章节。"
+
+def get_planner_task() -> str:
+    """生成规划任务描述"""
+    return "请阅读现有草稿并规划终稿大纲，识别核心逻辑主线和市场分歧点。"
+
+def get_editor_task() -> str:
+    """生成编辑任务描述"""
+    return "请根据规划大纲和草稿内容，生成最终研报。确保逻辑连贯，保留所有图表和引用。"
 

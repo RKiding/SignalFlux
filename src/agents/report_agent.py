@@ -1,7 +1,10 @@
+import hashlib
 import json
+import textwrap
+import time
 from datetime import datetime, timedelta
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from agno.agent import Agent
 from agno.models.base import Model
 from loguru import logger
@@ -11,15 +14,23 @@ from utils.hybrid_search import InMemoryRAG
 from utils.json_utils import extract_json
 from utils.stock_tools import StockTools
 import re
-from schema.models import InvestmentSignal, InvestmentReport, TransmissionNode
+from schema.models import InvestmentSignal, InvestmentReport, TransmissionNode, ClusterContext
 from prompts.report_agent import (
+    get_report_planner_base_instructions,
+    get_report_writer_base_instructions,
+    get_report_editor_base_instructions,
+    format_signal_for_report,
     get_cluster_planner_instructions,
     get_report_planner_instructions,
     get_report_writer_instructions,
     get_report_editor_instructions,
     get_section_editor_instructions,
     get_summary_generator_instructions,
-    get_final_assembly_instructions
+    get_final_assembly_instructions,
+    get_cluster_task,
+    get_writer_task,
+    get_planner_task,
+    get_editor_task
 )
 
 
@@ -29,9 +40,10 @@ class ReportAgent:
     支持增量编辑模式，避免一次性加载所有章节
     """
     
-    def __init__(self, db: DatabaseManager, model: Model, incremental_edit: bool = True):
+    def __init__(self, db: DatabaseManager, model: Model, incremental_edit: bool = True, tool_model: Optional[Model] = None):
         self.db = db
         self.model = model
+        self.tool_model = tool_model or model
         self.incremental_edit = incremental_edit
         
         # 0. InMemory RAG for cross-chapter context
@@ -39,63 +51,41 @@ class ReportAgent:
         
         # 1. Planner Agent
         self.planner = Agent(
-            model=model,
+            model=self.tool_model,
             tools=[self.rag.search],
+            instructions=[get_report_planner_base_instructions()],
             markdown=True,
-            debug_mode=True
+            debug_mode=True,
+            output_schema=ClusterContext if hasattr(self.tool_model, 'response_format') else None
         )
         
         # 2. Writer Agent
         self.writer = Agent(
             model=model,
+            instructions=[get_report_writer_base_instructions()],
             markdown=True,
             debug_mode=True
         )
         
         # 3. Editor Agent
         self.editor = Agent(
-            model=model,
+            model=self.tool_model,
             tools=[self.rag.search],
+            instructions=[get_report_editor_base_instructions()],
             markdown=True,
             debug_mode=True
         )
         
         # 5. Section Editor Agent (用于增量编辑)
         self.section_editor = Agent(
-            model=model,
+            model=self.tool_model,
             tools=[self.rag.search],
+            instructions=[get_report_editor_base_instructions()],
             markdown=True,
             debug_mode=True
         )
         
         logger.info(f"📝 ReportAgent initialized (incremental_edit={incremental_edit})")
-
-    def _format_signal_input(self, signal: Any, index: int) -> str:
-        """格式化信号供 prompt 使用 (适配 InvestmentSignal 模型)"""
-        # 如果是字典，转为模型
-        if isinstance(signal, dict):
-            try:
-                sig_obj = InvestmentSignal(**signal)
-            except:
-                # Fallback for old dicts
-                return f"--- 信号 [{index}] ---\n标题: {signal.get('title')}\n内容: {signal.get('content', '')[:500]}"
-        else:
-            sig_obj = signal
-
-        chain_str = " -> ".join([f"{n.node_name}({n.impact_type})" for n in sig_obj.transmission_chain])
-        
-        text = f"--- 信号 [{index}] ---\n"
-        text += f"标题: {sig_obj.title}\n"
-        text += f"逻辑摘要: {sig_obj.summary}\n"
-        text += f"传导链条: {chain_str}\n"
-        text += f"ISQ 评分: 情绪({sig_obj.sentiment_score}), 确定性({sig_obj.confidence}), 强度({sig_obj.intensity})\n"
-        text += f"预期博弈: 时窗({sig_obj.expected_horizon}), 预期差({sig_obj.price_in_status})\n"
-        
-        tickers = ", ".join([f"{t.get('name')}({t.get('ticker')})" for t in sig_obj.impact_tickers])
-        if tickers:
-            text += f"受影响标的: {tickers}\n"
-            
-        return text
 
     def _cluster_signals(self, signals: List[Dict[str, Any]], user_query: str = None) -> List[Dict[str, Any]]:
         """
@@ -114,7 +104,7 @@ class ReportAgent:
         self.planner.instructions = [instruction]
         
         try:
-            response = self.planner.run("请对以上信号进行主题聚类。")
+            response = self.planner.run(get_cluster_task(signals_preview))
             content = response.content
             
             cluster_data = extract_json(content)
@@ -177,7 +167,7 @@ class ReportAgent:
                     sources_list_lines.append(f"[{sig_idx}] {signal.get('title')} ({signal.get('source')}), {signal.get('url', 'N/A')}")
                 
                 # 聚合信号文本
-                cluster_signals_text += self._format_signal_input(signal, sig_idx) + "\n"
+                cluster_signals_text += format_signal_for_report(signal, sig_idx) + "\n"
                 
                 # 聚合行情 Context (去重)
                 analysis_text = getattr(signal, 'analysis', '') if not isinstance(signal, dict) else signal.get('analysis', '')
@@ -194,7 +184,8 @@ class ReportAgent:
                                 last_5 = df_ctx.tail(5)
                                 prices_str = ", ".join([f"{row['date']}:{row['close']}" for _, row in last_5.iterrows()])
                                 cluster_price_context += f"- {t}: {prices_str}\n"
-                        except:
+                        except Exception as e:
+                            logger.debug(f"Failed to get price context for ticker {t}: {e}")
                             continue
 
             # 撰写单节草稿 (基于主题)
@@ -208,7 +199,7 @@ class ReportAgent:
             
             try:
                 self.writer.instructions = [writer_instruction] 
-                response = self.writer.run(f"请依据主题 '{theme_title}' 和 输入信号集 开始撰写。")
+                response = self.writer.run(get_writer_task(theme_title))
                 content = response.content.strip()
                 
                 # 尝试提取第一行作为标题
@@ -263,7 +254,7 @@ class ReportAgent:
             self.planner.instructions = [planner_instruction]
             
             try:
-                plan_response = self.planner.run("请阅读现有草稿并规划终稿大纲。")
+                plan_response = self.planner.run(get_planner_task())
                 report_plan = plan_response.content
                 logger.info("✅ Report plan generated.")
             except Exception as e:
@@ -279,7 +270,7 @@ class ReportAgent:
             
             try:
                 # 使用 Editor 进行重组和润色
-                final_response = self.editor.run("请根据规划大纲和草稿内容，生成最终研报。")
+                final_response = self.editor.run(get_editor_task())
                 final_response_content = final_response.content
             except Exception as e:
                 logger.error(f"Final editing failed: {e}")
@@ -326,8 +317,6 @@ class ReportAgent:
 
     def _incremental_edit(self, sections: List[str], sources_list_text: str, section_titles_data: List[tuple] = None) -> str:
         """增量编辑模式"""
-        import time
-        
         # 1. 填充 RAG
         draft_docs = []
         toc_lines = []
@@ -412,9 +401,6 @@ class ReportAgent:
         # 5. 组装最终报告
         current_date = datetime.now().strftime('%Y-%m-%d')
         
-        import textwrap
-        import re
-        
         # 清理 edited_sections：只做代码块保护和基本清理
         
         # 清理 edited_sections 中的标题层级问题
@@ -462,8 +448,6 @@ class ReportAgent:
 
     def _process_charts(self, content: str) -> str:
         """解析 json-chart 代码块并替换为 HTML 链接/Iframe"""
-
-        import re
         from utils.visualizer import VisualizerTools
         from utils.stock_tools import StockTools
         
@@ -493,24 +477,58 @@ class ReportAgent:
                         if not t:
                             continue
                         
-                        # 标准6位数字格式
-                        if len(t) == 6 and t.isdigit():
-                            valid_tickers.append(t)
-                        # 带后缀格式：301367.SZ, 600519.SH
-                        elif '.' in t:
-                            code_part = t.split('.')[0]
-                            if len(code_part) == 6 and code_part.isdigit():
-                                valid_tickers.append(code_part)
-                                logger.info(f"📊 Extracted ticker {code_part} from {t}")
-                        # 尝试模糊匹配（用公司名搜索）
-                        elif len(t) > 1:
+                        # 1. 预处理：移除后缀
+                        clean_t = t.split('.')[0] if '.' in t else t
+                        
+                        # 2. 直接匹配：5位(港股) 或 6位(A股) 数字代码
+                        if clean_t.isdigit() and (len(clean_t) == 5 or len(clean_t) == 6):
+                            valid_tickers.append(clean_t)
+                            logger.info(f"📊 Extracted ticker {clean_t} from {t}")
+                            continue
+
+                        # 3. 尝试模糊匹配（处理名称、短代码等）
+                        if len(t) > 1 or (clean_t.isdigit() and len(clean_t) < 5):
                             try:
                                 search_results = stock_tools.search_ticker(t)
                                 if search_results and len(search_results) > 0:
-                                    first_match = search_results[0].get('code', '')
-                                    if first_match:
-                                        valid_tickers.append(first_match)
-                                        logger.info(f"📊 Fuzzy matched ticker {first_match} from query '{t}'")
+                                    best_match = None
+                                    
+                                    # 智能匹配逻辑
+                                    if clean_t.isdigit():
+                                        # 构造可能的完整代码
+                                        candidates = []
+                                        # 如果明确是 HK 后缀，优先匹配 5 位补零
+                                        if '.HK' in t.upper():
+                                            candidates.append(clean_t.zfill(5))
+                                        # 如果明确是 A 股后缀，优先匹配 6 位补零
+                                        elif '.SZ' in t.upper() or '.SH' in t.upper():
+                                            candidates.append(clean_t.zfill(6))
+                                        else:
+                                            # 无后缀，都尝试，优先 5 位 (港股短码常见)，然后 6 位
+                                            candidates.append(clean_t.zfill(5))
+                                            candidates.append(clean_t.zfill(6))
+                                        
+                                        # 在搜索结果中寻找完全匹配
+                                        for cand in candidates:
+                                            for res in search_results:
+                                                if res['code'] == cand:
+                                                    best_match = res['code']
+                                                    break
+                                            if best_match: break
+                                    
+                                    # 如果没有通过数字补全找到，尝试名称匹配或默认第一个
+                                    if not best_match:
+                                        # 再次遍历，看有没有完全等于 clean_t 的 (虽然前面 digit check 应该覆盖了)
+                                        for res in search_results:
+                                            if res['code'] == clean_t:
+                                                best_match = res['code']
+                                                break
+                                    
+                                    final_ticker = best_match if best_match else search_results[0].get('code', '')
+                                    
+                                    if final_ticker:
+                                        valid_tickers.append(final_ticker)
+                                        logger.info(f"📊 Fuzzy matched ticker {final_ticker} from query '{t}'")
                             except Exception as e:
                                 logger.warning(f"⚠️ Fuzzy search failed for {t}: {e}")
                     
@@ -617,7 +635,8 @@ class ReportAgent:
                                         d_str = str(dt)[:10] # 截取日期部分
                                         
                                     sentiment_history.append({"date": d_str, "score": row[1]})
-                                except:
+                                except (TypeError, ValueError, IndexError) as e:
+                                    logger.debug(f"Failed to parse sentiment row: {e}")
                                     continue
                             
                             # 聚合每天的平均分
@@ -664,7 +683,6 @@ class ReportAgent:
                     
                     if nodes:
                         # 生成基于节点内容的唯一标识，避免相同时间戳下的重复图表
-                        import hashlib
                         nodes_str = json.dumps(nodes, sort_keys=True, ensure_ascii=False)
                         content_hash = hashlib.md5(nodes_str.encode()).hexdigest()[:8]
                         

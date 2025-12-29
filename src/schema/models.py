@@ -13,21 +13,29 @@ class IntentAnalysis(BaseModel):
     time_range: str = Field(..., description="时间范围 (recent/all/specific_date)")
     intent_summary: str = Field(..., description="一句话意图描述")
 
+class FilterResult(BaseModel):
+    """LLM 筛选结果 - 快速判断是否有有效信号"""
+    has_valid_signals: bool = Field(..., description="列表中是否包含有效的金融信号")
+    selected_ids: List[int] = Field(default_factory=list, description="筛选出的有效信号 ID 列表")
+    themes: List[str] = Field(default_factory=list, description="信号涉及的主题")
+    reason: Optional[str] = Field(default=None, description="如果无有效信号，说明原因")
+
 class InvestmentSignal(BaseModel):
     # 核心元数据
     signal_id: str = Field(default="unknown_sig", description="唯一信号 ID")
-    title: str = Field(default="未命名信号", description="信号标题")
+    title: str = Field(..., description="信号标题")
     summary: str = Field(default="暂无摘要分析", description="100 字核心观点快报")
     
     # 逻辑传导 (ISQ Key 1)
     transmission_chain: List[TransmissionNode] = Field(default_factory=list, description="产业链传导逻辑链条")
     
-    # 信号质量 (ISQ Key 2)
-    sentiment_score: float = Field(default=0.0, description="基础情绪偏向 (-1.0 到 1.0)")
-    confidence: float = Field(default=0.5, description="信号确定性分值 (0.0 到 1.0)")
-    intensity: int = Field(default=3, description="信号强度等级 (1-5)")
-    expectation_gap: float = Field(default=0.5, description="预期差/博弈空间 (0.0 到 1.0)")
-    timeliness: float = Field(default=0.8, description="时效性/窗口紧迫度 (0.0 到 1.0)")
+    # 信号质量 (ISQ Key 2) - 来自 isq_template.DEFAULT_ISQ_TEMPLATE
+    # 参考: src/schema/isq_template.py 的 DEFAULT_ISQ_TEMPLATE 定义
+    sentiment_score: float = Field(default=0.0, description="[ISQ] 情绪/走势 (-1.0=极度看空 ~ 0.0=中性 ~ 1.0=极度看多)")
+    confidence: float = Field(default=0.5, description="[ISQ] 确定性 (0.0=不可信 ~ 1.0=完全确定)")
+    intensity: int = Field(default=3, description="[ISQ] 强度/影响量级 (1=微弱 ~ 5=极强)")
+    expectation_gap: float = Field(default=0.5, description="[ISQ] 预期差/博弈空间 (0.0=充分定价 ~ 1.0=巨大预期差)")
+    timeliness: float = Field(default=0.8, description="[ISQ] 时效性 (0.0=长期 ~ 1.0=超短期)")
     
     # 预测与博弈 (ISQ Key 3)
     expected_horizon: str = Field(default="T+N", description="预期的反应时窗 (如: T+0, T+3, Long-term)")
@@ -39,7 +47,33 @@ class InvestmentSignal(BaseModel):
     
     # 溯源
     sources: List[Dict[str, str]] = Field(default_factory=list, description="来源详情 (包含 title, url, source_name)")
-    
+
+class ResearchContext(BaseModel):
+    """研究员搜集的背景信息结构"""
+    raw_signal: str = Field(..., description="原始信号内容")
+    tickers_found: List[Dict[str, Any]] = Field(default_factory=list, description="找到的相关标的及其基本面/股价信息")
+    industry_background: str = Field(..., description="行业背景及产业链现状")
+    latest_developments: List[str] = Field(default_factory=list, description="相关事件的最新进展")
+    key_risks: List[str] = Field(default_factory=list, description="潜在风险点")
+    search_results_summary: str = Field(..., description="搜索结果的综合摘要")
+
+class ScanContext(BaseModel):
+    """扫描员搜集的原始数据结构"""
+    hot_topics: List[str] = Field(..., description="当前市场热点话题")
+    news_summaries: List[Dict[str, Any]] = Field(..., description="关键新闻摘要列表")
+    market_data: Dict[str, Any] = Field(default_factory=dict, description="相关的市场行情数据")
+    sentiment_overview: str = Field(..., description="整体市场情绪概览")
+    raw_data_summary: str = Field(..., description="原始数据的综合摘要")
+
+class SignalCluster(BaseModel):
+    theme_title: str = Field(..., description="主题名称")
+    signal_ids: List[int] = Field(..., description="包含的信号 ID 列表")
+    rationale: str = Field(..., description="聚类理由")
+
+class ClusterContext(BaseModel):
+    """信号聚类结果结构"""
+    clusters: List[SignalCluster] = Field(..., description="聚类列表")
+
 class InvestmentReport(BaseModel):
     overall_sentiment: str = Field(..., description="整体市场情绪评价")
     market_entropy: float = Field(..., description="市场分歧度 (0-1, 1代表极高分歧)")

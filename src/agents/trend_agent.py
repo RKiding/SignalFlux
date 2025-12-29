@@ -6,7 +6,15 @@ from loguru import logger
 
 from utils.database_manager import DatabaseManager
 from tools.toolkits import NewsToolkit, StockToolkit, SentimentToolkit, SearchToolkit, PolymarketToolkit
-from prompts.trend_agent import get_trend_agent_instructions
+from prompts.trend_agent import (
+    get_trend_scanner_instructions, 
+    get_trend_evaluator_instructions,
+    get_trend_scan_task,
+    format_scan_context,
+    get_trend_eval_task
+)
+from schema.models import ScanContext
+from utils.json_utils import extract_json
 
 # 从环境变量读取默认配置
 DEFAULT_SENTIMENT_MODE = os.getenv("SENTIMENT_MODE", "auto")
@@ -15,28 +23,22 @@ DEFAULT_SENTIMENT_MODE = os.getenv("SENTIMENT_MODE", "auto")
 class TrendAgent:
     """
     趋势挖掘 Agent - 负责在全网范围内捕抓金融信号
-    
-    使用 Agno 原生 Function Calling，需要模型支持工具调用（如 qwen2.5, gpt-4 等）
-    
-    功能:
-    - 扫描多平台热点新闻（微博、知乎、财联社、华尔街见闻等）
-    - 过滤并识别具有金融价值的信号
-    - 关联相关股票代码和行业
-    - 进行情绪分析和信号强度评估
+    采用双模型架构：Tool Model 负责数据采集，Reasoning Model 负责信号筛选与价值评估。
     """
     
-    def __init__(self, db: DatabaseManager, model: Model, sentiment_mode: Optional[str] = None):
+    def __init__(self, db: DatabaseManager, model: Model, tool_model: Optional[Model] = None, sentiment_mode: Optional[str] = None):
         """
         初始化趋势挖掘 Agent。
         
         Args:
             db: 数据库管理器实例
-            model: LLM 模型实例（需支持 Function Calling）
-            sentiment_mode: 情绪分析模式，可选 "auto", "bert", "llm"。
-                           None 则使用环境变量 SENTIMENT_MODE 或默认 "auto"。
+            model: Reasoning Model (用于筛选和评估)
+            tool_model: Tool Model (用于执行工具调用)
+            sentiment_mode: 情绪分析模式
         """
         self.db = db
         self.model = model
+        self.tool_model = tool_model or model
         
         # 使用传入的模式或环境变量默认值
         effective_sentiment_mode = sentiment_mode or DEFAULT_SENTIMENT_MODE
@@ -48,15 +50,11 @@ class TrendAgent:
         self.search_toolkit = SearchToolkit(db)
         self.polymarket_toolkit = PolymarketToolkit(db)
         
-        logger.info(f"🔧 TrendAgent initialized with sentiment_mode={effective_sentiment_mode}")
+        logger.info(f"🔧 TrendAgent initialized (Dual-Model: Reasoning={self.model.id}, Tool={self.tool_model.id})")
         
-        # 获取带有实时时间的指令
-        instructions = get_trend_agent_instructions()
-        
-        # 构建 Agno Agent，注册 Toolkits
-        self.agent = Agent(
-            model=self.model,
-            instructions=[instructions],
+        # 1. 扫描员 Agent (负责执行工具调用获取原始数据)
+        self.scanner = Agent(
+            model=self.tool_model,
             tools=[
                 self.news_toolkit,
                 self.stock_toolkit,
@@ -64,21 +62,43 @@ class TrendAgent:
                 self.search_toolkit,
                 self.polymarket_toolkit,
             ],
+            instructions=[get_trend_scanner_instructions()],
+            markdown=True,
+            output_schema=ScanContext if hasattr(self.tool_model, 'response_format') else None
+        )
+
+        # 2. 评估员 Agent (负责对扫描到的数据进行价值判断)
+        self.evaluator = Agent(
+            model=self.model,
+            instructions=[get_trend_evaluator_instructions()],
             markdown=True
         )
 
     def run(self, task_description: str = "分析当前全网热点，找出最有价值的三个金融信号"):
         """
         执行趋势发现任务。
-        
-        Args:
-            task_description: 任务描述，指导 Agent 的分析方向。
-        
-        Returns:
-            Agent 的响应对象，包含分析结果。
         """
         logger.info(f"🚀 TrendAgent starting task: {task_description}")
-        return self.agent.run(task_description)
+        
+        # 第一阶段：扫描数据（使用 Tool Model 调用工具获取原始数据）
+        logger.info("📡 Phase 1: Scanner executing tool calls...")
+        scan_prompt = get_trend_scan_task(task_description)
+        scan_response = self.scanner.run(scan_prompt)
+        scan_raw_content = scan_response.content if hasattr(scan_response, 'content') else str(scan_response)
+        
+        logger.debug(f"Scanner output length: {len(scan_raw_content)} chars")
+        
+        # 尝试解析为 ScanContext 以提取结构化数据
+        scan_data = extract_json(scan_raw_content)
+        # 使用完整的扫描输出（包含所有工具调用结果），而不是格式化版本
+        raw_data_str = scan_raw_content if scan_raw_content else "无法获取扫描数据"
+        
+        logger.info(f"✅ Scanning phase completed. Data length: {len(raw_data_str)} chars")
+        
+        # 第二阶段：评估价值（使用 Reasoning Model 进行深度分析）
+        logger.info("🧠 Phase 2: Evaluator analyzing scan results...")
+        eval_prompt = get_trend_eval_task(task_description, raw_data_str)
+        return self.evaluator.run(eval_prompt)
 
 
     def discover_daily_signals(self, focus_sources: Optional[List[str]] = None):

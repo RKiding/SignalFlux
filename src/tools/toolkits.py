@@ -266,14 +266,34 @@ class StockToolkit(Toolkit):
         if df.empty:
             return f"未能获取 {ticker} 的股价数据"
         
+
         latest = df.iloc[-1]
         change = ((latest['close'] - df.iloc[0]['close']) / df.iloc[0]['close']) * 100
         
+        # 格式化历史数据供 LLM 分析 (取最近 15 天)
+        history_df = df.tail(15).copy()
+        history_df['date'] = history_df['date'].astype(str)
+        # 简化列名以节省 token
+        history_cols = ['date', 'open', 'close', 'high', 'low', 'volume']
+        
+        # 尝试使用 markdown 格式，如果失败退回到 string
+        try:
+             history_str = history_df[history_cols].to_markdown(index=False, numalign="left", stralign="left")
+        except ImportError:
+             history_str = history_df[history_cols].to_string(index=False)
+        except Exception:
+             history_str = history_df[history_cols].to_string(index=False)
+
         return f"""## {ticker} 价格走势 ({days}天)
 - 当前价: ¥{latest['close']:.2f}
 - 期间涨跌: {change:+.2f}%
 - 最高/最低: ¥{df['high'].max():.2f} / ¥{df['low'].min():.2f}
-- 数据范围: {df.iloc[0]['date']} -> {latest['date']}"""
+- 数据范围: {df.iloc[0]['date']} -> {latest['date']}
+
+### 最近 15 个交易日详细数据 (OHLCV):
+{history_str}
+"""
+
 
 
 class SentimentToolkit(Toolkit):

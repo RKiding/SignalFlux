@@ -34,13 +34,23 @@ class StockTools:
             logger.info(f"ℹ️ Stock list already cached ({count} stocks)")
             return
         
-        logger.info("📡 Updating A-share stock list from akshare...")
+        logger.info("📡 Updating A-share and HK-share stock list from akshare...")
         try:
-            df = ak.stock_zh_a_spot_em()
-            df = df[['代码', '名称']].copy()
-            df.columns = ['code', 'name']
-            self.db.save_stock_list(df)
-            logger.info(f"✅ Cached {len(df)} stocks to database.")
+            # A-share
+            df_a = ak.stock_zh_a_spot_em()
+            df_a = df_a[['代码', '名称']].copy()
+            df_a.columns = ['code', 'name']
+            
+            # HK-share
+            df_hk = ak.stock_hk_spot_em()
+            df_hk = df_hk[['代码', '名称']].copy()
+            df_hk.columns = ['code', 'name']
+            
+            # Combine
+            df_combined = pd.concat([df_a, df_hk], ignore_index=True)
+            
+            self.db.save_stock_list(df_combined)
+            logger.info(f"✅ Cached {len(df_combined)} stocks (A-share + HK) to database.")
         except Exception as e:
             logger.error(f"❌ Failed to sync stock list: {e}")
 
@@ -108,12 +118,23 @@ class StockTools:
                 s_fmt = start_date.replace("-", "")
                 e_fmt = end_date.replace("-", "")
                 
-                # 尝试获取数据
-                df_remote = ak.stock_zh_a_hist(
-                    symbol=clean_ticker, period="daily",
-                    start_date=s_fmt, end_date=e_fmt,
-                    adjust="qfq"
-                )
+                df_remote = None
+                
+                # Determine if HK or A-share based on length (HK is 5 digits, A-share is 6)
+                if len(clean_ticker) == 5:
+                    # HK Stock
+                    df_remote = ak.stock_hk_hist(
+                        symbol=clean_ticker, period="daily",
+                        start_date=s_fmt, end_date=e_fmt,
+                        adjust="qfq"
+                    )
+                else:
+                    # A-share Stock
+                    df_remote = ak.stock_zh_a_hist(
+                        symbol=clean_ticker, period="daily",
+                        start_date=s_fmt, end_date=e_fmt,
+                        adjust="qfq"
+                    )
                 
                 if df_remote is not None and not df_remote.empty:
                     df_remote = df_remote.rename(columns={

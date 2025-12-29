@@ -38,3 +38,8 @@ def get_intent_analysis_instructions() -> str:
 }
 ```
 """
+
+def get_intent_task(query: str) -> str:
+    """生成意图分析任务描述"""
+    return f"Process this query and extract financial market intent: {query}"
+

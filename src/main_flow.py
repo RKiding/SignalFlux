@@ -2,12 +2,13 @@ import os
 import json
 import re
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Union
 from loguru import logger
 from dotenv import load_dotenv
 
 from utils.database_manager import DatabaseManager
 from utils.llm.factory import get_model
+from utils.llm.router import router
 from utils.search_tools import SearchTools
 from utils.json_utils import extract_json
 from agents import TrendAgent, FinAgent, ReportAgent, IntentAgent
@@ -22,39 +23,42 @@ class SignalFluxWorkflow:
     
     流程:
     1. TrendAgent -> 扫描热点
-    2. FinAgent -> 深度分析 (并行)
+    2. FinAgent -> 深度分析
     3. ReportAgent -> 生成研报
     """
     
-    def __init__(self, db_path: str = "data/signal_flux.db"):
+    def __init__(self, db_path: str = "data/signal_flux.db", isq_template_id: str = "default_isq_v1"):
         load_dotenv()
+        self.isq_template_id = isq_template_id
         # 初始化数据库
         self.db = DatabaseManager(db_path)
         
-        # 初始化模型
-        provider = os.getenv("LLM_PROVIDER", "ust")
-        model_id = os.getenv("LLM_MODEL", "Qwen")
-        host = os.getenv("OLLAMA_HOST")
-        if host:
-            self.model = get_model(provider, model_id, host=host)
-        else:
-            self.model = get_model(provider, model_id)
+        # 使用 ModelRouter 获取不同用途的模型
+        self.reasoning_model = router.get_reasoning_model()
+        self.tool_model = router.get_tool_model()
         
         # 初始化 Agents
-        self.trend_agent = TrendAgent(self.db, self.model, sentiment_mode="bert")
-        self.fin_agent = FinAgent(self.db, self.model)
-        self.report_agent = ReportAgent(self.db, self.model)
-        self.intent_agent = IntentAgent(self.model)
+        # TrendAgent 使用双模型：筛选使用 reasoning_model，采集使用 tool_model
+        self.trend_agent = TrendAgent(self.db, self.reasoning_model, tool_model=self.tool_model, sentiment_mode="bert")
+        # FinAgent 使用双模型：分析使用 reasoning_model，检索使用 tool_model，ISQ 模板可配置
+        self.fin_agent = FinAgent(self.db, self.reasoning_model, tool_model=self.tool_model, isq_template_id=self.isq_template_id)
+        # ReportAgent 支持双模型：写作使用 reasoning_model，检索使用 tool_model
+        self.report_agent = ReportAgent(self.db, self.reasoning_model, tool_model=self.tool_model)
+        # 意图分析主要是文本理解，使用推理模型
+        self.intent_agent = IntentAgent(self.reasoning_model)
         self.search_tools = SearchTools(self.db)
         
-        # 用于筛选的轻量 Agent（不带工具）
-        self.filter_agent = Agent(model=self.model, markdown=True, debug_mode=True)
+        # 用于筛选的轻量 Agent（不带工具），使用推理模型
+        self.filter_agent = Agent(model=self.reasoning_model, markdown=True, debug_mode=True)
         
-        logger.info("🚀 SignalFlux Workflow initialized")
+        logger.info(f"🚀 SignalFlux Workflow initialized with Dual-Model Routing (ISQ Template: {self.isq_template_id})")
     
-    def _llm_filter_signals(self, news_list: List[Dict], depth: Any, query: str = None) -> List[Dict]:
-        """使用 LLM 智能筛选高价值信号"""
-        if type(depth) == int and len(news_list) <= depth and not query:
+    def _llm_filter_signals(self, news_list: List[Dict], depth: Union[int, str], query: Optional[str] = None) -> List[Dict]:
+        """使用 LLM 智能筛选高价值信号
+        
+        使用 FilterResult schema 快速判断是否有有效信号，避免处理无效内容
+        """
+        if isinstance(depth, int) and len(news_list) <= depth and not query:
             return news_list
         
         # 构建新闻列表文本
@@ -73,6 +77,11 @@ class SignalFluxWorkflow:
             
             # 提取 JSON
             result = extract_json(content)
+            
+            # 检查是否有有效信号（减少 token 消耗）
+            if result and not result.get("has_valid_signals", True):
+                logger.warning(f"⚠️ No valid signals found: {result.get('reason', 'Unknown')}")
+                return []
             if not result:
                 logger.warning(f"Failed to parse LLM filter response: {content}")
                 return news_list
@@ -109,15 +118,21 @@ class SignalFluxWorkflow:
     TECH_SOURCES = ["36kr", "ithome", "v2ex", "juejin", "hackernews"]
     ALL_SOURCES = FINANCIAL_SOURCES + SOCIAL_SOURCES + TECH_SOURCES
     
-    def run(self, sources: List[str] = ["all"], wide: int = 10, depth: Any = 'auto', query: Optional[str] = None):
+    def run(self, sources: List[str] = None, wide: int = 10, depth: Union[int, str] = 'auto', query: Optional[str] = None) -> Optional[str]:
         """执行完整工作流
         
         Args:
-            sources: 新闻来源列表
+            sources: 新闻来源列表，默认为 ["all"]
             wide:  新闻抓取广度（每个源抓取的数量）
-            depth: 生成报告的深度，若为auto，则由LLM总结判断，若为整数则限制最后生成的信号数量
+            depth: 生成报告的深度，若为 'auto'，则由 LLM 总结判断，若为整数则限制最后生成的信号数量
             query:  用户查询意图（可选），如 "香港火灾"、"A股科技板块"
+            
+        Returns:
+            生成的报告文件路径，或 None（如果失败）
         """
+        if sources is None:
+            sources = ["all"]
+            
         logger.info("--- Step 1: Trend Discovery ---")
         
         # 0. 意图分析 (如果存在 query)
@@ -202,7 +217,7 @@ class SignalFluxWorkflow:
             high_value_signals = self._llm_filter_signals(raw_news, depth, query)
         else:
             # 传统方式：按情绪分数排序
-            if type(depth) == int and depth>0:
+            if isinstance(depth, int) and depth > 0:
                 high_value_signals = sorted(
                     raw_news, 
                     key=lambda x: abs(x.get("sentiment_score") or 0), 
@@ -278,7 +293,34 @@ class SignalFluxWorkflow:
         return md_filename
 
 if __name__ == "__main__":
-    workflow = SignalFluxWorkflow()
-    # workflow.run(query='帮我分析一下近期热点')
-    workflow.run()
-    # workflow.run(sources=['social'], wide=5, depth='auto')
+    import sys
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="SignalFlux Workflow - Investment Signal Analysis")
+    parser.add_argument("--template", type=str, default="default_isq_v1", 
+                        help="ISQ template ID (default: default_isq_v1)")
+    parser.add_argument("--sources", type=str, default="all", 
+                        help="News sources: 'all', 'financial', 'social', 'tech', or comma-separated list")
+    parser.add_argument("--wide", type=int, default=10, 
+                        help="Number of news items per source (default: 10)")
+    parser.add_argument("--depth", type=str, default="auto", 
+                        help="Report depth: 'auto' or integer limit (default: auto)")
+    parser.add_argument("--query", type=str, default=None, 
+                        help="User query/intent (optional)")
+    
+    args = parser.parse_args()
+    
+    # Parse sources
+    if args.sources.lower() in ["all", "financial", "social", "tech"]:
+        sources = [args.sources.lower()]
+    else:
+        sources = [s.strip() for s in args.sources.split(",")]
+    
+    # Parse depth
+    try:
+        depth = int(args.depth)
+    except ValueError:
+        depth = args.depth
+    
+    workflow = SignalFluxWorkflow(isq_template_id=args.template)
+    workflow.run(sources=sources, wide=args.wide, depth=depth, query=args.query)

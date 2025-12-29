@@ -1,6 +1,6 @@
 from agno.agent import Agent
 from loguru import logger
-from prompts.intent_agent import get_intent_analysis_instructions
+from prompts.intent_agent import get_intent_analysis_instructions, get_intent_task
 from schema.models import IntentAnalysis
 from utils.json_utils import extract_json
 
@@ -8,6 +8,7 @@ class IntentAgent:
     """意图分析 Agent - 负责解析用户查询意图"""
     
     def __init__(self, model):
+        self.model = model
         self.agent = Agent(
             model=model,
             instructions=[get_intent_analysis_instructions()],
@@ -28,12 +29,11 @@ class IntentAgent:
         """
         try:
             logger.info(f"🧠 Analyzing intent for: {query}")
-            response = self.agent.run(f"Process this query: {query}")
+            response = self.agent.run(get_intent_task(query))
             content = response.content
             
             # 使用统一工具提取 JSON
-            result = extract_json(content)
-            
+            result = extract_json(content)            
             if not result:
                logger.warning("Intent output is not valid JSON, returning raw text in wrapper")
                result = {"intent_summary": content, "search_queries": [query], "is_specific_event": False, "keywords": [], "time_range": "recent"}

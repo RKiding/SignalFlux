@@ -1,3 +1,4 @@
+import ast
 import json
 import re
 from typing import Optional, Any
@@ -161,7 +162,6 @@ def extract_json(text: str) -> Optional[Any]:
         except (json.JSONDecodeError, TypeError):
             try:
                 # 5. 使用 ast.literal_eval 作为终极回退 (处理 Python 字典格式)
-                import ast
                 # 提取第一个匹配的括号对内容
                 # 寻找匹配的 { }
                 stack = []

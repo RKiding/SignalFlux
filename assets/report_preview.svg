@@ -1,0 +1,73 @@
+<svg width="800" height="500" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="2" dy="4" result="offsetblur"/>
+      <feComponentTransfer>
+         <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge> 
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/> 
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Window Frame -->
+  <rect x="50" y="20" width="700" height="460" rx="10" fill="#0d1117" filter="url(#shadow)" stroke="#30363d" stroke-width="1"/>
+  
+  <!-- Window Controls -->
+  <circle cx="75" cy="40" r="6" fill="#ff5f56"/>
+  <circle cx="95" cy="40" r="6" fill="#ffbd2e"/>
+  <circle cx="115" cy="40" r="6" fill="#27c93f"/>
+
+  <!-- Toolbar / Header -->
+  <rect x="51" y="65" width="698" height="1" fill="#30363d"/>
+  <text x="350" y="45" font-family="monospace" font-size="14" fill="#8b949e">SignalFlux Report Preview</text>
+
+  <!-- Report Body Content - Abstract Layout -->
+  
+  <!-- Title Block -->
+  <rect x="100" y="100" width="400" height="24" rx="4" fill="#58a6ff" fill-opacity="0.2"/>
+  <rect x="100" y="135" width="200" height="12" rx="2" fill="#8b949e" fill-opacity="0.5"/>
+
+  <!-- Table Section -->
+  <text x="100" y="180" font-family="sans-serif" font-size="12" font-weight="bold" fill="#c9d1d9">1. Executive Summary</text>
+  
+  <!-- Table Header -->
+  <rect x="100" y="195" width="600" height="25" fill="#161b22" stroke="#30363d"/>
+  
+  <!-- Table Rows -->
+  <rect x="100" y="220" width="600" height="25" fill="#0d1117" stroke="#30363d"/>
+  <rect x="550" y="228" width="50" height="8" rx="4" fill="#ff7b72" fill-opacity="0.8"/> <!-- High Intensity Badge -->
+  
+  <rect x="100" y="245" width="600" height="25" fill="#161b22" stroke="#30363d"/>
+  <rect x="550" y="253" width="50" height="8" rx="4" fill="#d2a8ff" fill-opacity="0.8"/> <!-- Badge -->
+  
+  <rect x="100" y="270" width="600" height="25" fill="#0d1117" stroke="#30363d"/>
+
+  <!-- Chart Section -->
+  <text x="100" y="330" font-family="sans-serif" font-size="12" font-weight="bold" fill="#c9d1d9">3. ISQ Assessment</text>
+  
+  <!-- Chart Placeholder Box -->
+  <rect x="100" y="345" width="280" height="100" rx="4" fill="#0d1117" stroke="#30363d"/>
+  
+  <!-- Simulated Radar Chart -->
+  <path d="M 240 365 L 270 395 L 240 425 L 210 395 Z" fill="none" stroke="#3fb950" stroke-width="2" stroke-opacity="0.5"/>
+  <path d="M 240 375 L 260 395 L 240 415 L 220 395 Z" fill="#3fb950" fill-opacity="0.3" stroke="#3fb950" stroke-width="1"/>
+  
+  <!-- Chart Legend Text -->
+  <rect x="290" y="360" width="60" height="6" rx="2" fill="#8b949e"/>
+  <rect x="290" y="375" width="40" height="6" rx="2" fill="#8b949e"/>
+  
+  <!-- Text Content Column -->
+  <rect x="400" y="345" width="300" height="6" rx="2" fill="#8b949e" fill-opacity="0.8"/>
+  <rect x="400" y="360" width="280" height="6" rx="2" fill="#8b949e" fill-opacity="0.6"/>
+  <rect x="400" y="375" width="290" height="6" rx="2" fill="#8b949e" fill-opacity="0.6"/>
+  <rect x="400" y="390" width="250" height="6" rx="2" fill="#8b949e" fill-opacity="0.6"/>
+  
+  <!-- Click to View Overlay Hint -->
+  <rect x="250" y="220" width="300" height="60" rx="30" fill="#000000" fill-opacity="0.7"/>
+  <text x="400" y="255" font-family="sans-serif" font-size="16" font-weight="bold" fill="#ffffff" text-anchor="middle">🔎 Click to View Full Report</text>
+
+</svg>

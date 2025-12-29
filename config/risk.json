@@ -1,0 +1,62 @@
+{
+  "template_id": "isq_risk_v1",
+  "template_name": "风险监测型 ISQ",
+  "description": "下行风险识别，突出确定性与强度",
+  "dimensions": {
+    "sentiment": {
+      "name": "情绪",
+      "key": "sentiment",
+      "description": "风险情绪",
+      "range_type": "-1.0 到 1.0",
+      "scale_factor": 1.0,
+      "examples": {},
+      "visualization_color": null
+    },
+    "confidence": {
+      "name": "确定性",
+      "key": "confidence",
+      "description": "风险可信度",
+      "range_type": "0.0 到 1.0",
+      "scale_factor": 1.0,
+      "examples": {},
+      "visualization_color": null
+    },
+    "intensity": {
+      "name": "强度",
+      "key": "intensity",
+      "description": "风险冲击强度",
+      "range_type": "1 到 5",
+      "scale_factor": 20.0,
+      "examples": {},
+      "visualization_color": null
+    },
+    "timeliness": {
+      "name": "时效性",
+      "key": "timeliness",
+      "description": "风险兑现速度",
+      "range_type": "0.0 到 1.0",
+      "scale_factor": 1.0,
+      "examples": {},
+      "visualization_color": null
+    },
+    "expectation_gap": {
+      "name": "预期差",
+      "key": "expectation_gap",
+      "description": "市场对风险的低估程度",
+      "range_type": "0.0 到 1.0",
+      "scale_factor": 1.0,
+      "examples": {},
+      "visualization_color": null
+    }
+  },
+  "scoring_guide": "风险优先：确定性>强度>时效>预期差>情绪",
+  "applicable_scenarios": ["风险监测", "黑天鹅事件", "下行压力"],
+  "aggregation_method": "weighted_average",
+  "dimension_weights": {
+    "confidence": 0.35,
+    "intensity": 0.30,
+    "timeliness": 0.20,
+    "expectation_gap": 0.10,
+    "sentiment": 0.05
+  }
+}

@@ -345,7 +345,7 @@ class SearchTools:
             # 初始化模型
             provider = os.getenv("LLM_PROVIDER", "ust")
             model_id = os.getenv("LLM_MODEL", "Qwen")
-            host = os.getenv("OLLAMA_HOST")
+            host = os.getenv("LLM_HOST")
             if host:
                 model = get_model(provider, model_id, host=host)
             else:

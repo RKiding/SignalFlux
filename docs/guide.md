@@ -70,7 +70,7 @@ SignalFlux 采用**分层架构**设计，确保了工具集（Tools）、大脑
 ### 3.1 快速启动
 1.  **环境配置**:
     - 在 `.env` 中配置 `LLM_PROVIDER`, `LLM_MODEL` 及具体的 API Key。
-    - 配置 `OLLAMA_HOST` (如果使用本地模型)。
+    - 配置 `LLM_HOST` (如果使用本地模型)。
 2.  **运行完整流**:
     ```bash
     # 进入 src 目录并执行

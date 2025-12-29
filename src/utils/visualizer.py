@@ -78,10 +78,10 @@ class VisualizerTools:
                 "日K",
                 k_data,
                 itemstyle_opts=opts.ItemStyleOpts(
-                    color="#ec0000",
-                    color0="#00da3c",
-                    border_color="#8A0000",
-                    border_color0="#008F28",
+                    color="#ef4444",  # Close < Open (Bearish/Red)
+                    color0="#22c55e", # Close > Open (Bullish/Green)
+                    border_color="#ef4444",
+                    border_color0="#22c55e",
                 ),
             )
             .set_global_opts(
