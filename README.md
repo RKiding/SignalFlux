@@ -123,7 +123,7 @@ graph TD
     Intent --> Trend[Trend Agent]
     
     subgraph "Discovery Layer"
-        Trend --> |Fetch & Filter| Source[Data Sources (News/Social)]
+        Trend --> |Fetch & Filter| Source["Data Sources (News/Social)"]
     end
     
     Trend --> |Raw Signals| Logic[Logic Filter]

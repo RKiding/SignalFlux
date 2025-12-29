@@ -124,7 +124,7 @@ graph TD
     Intent --> Trend[趋势猎手 Agent]
     
     subgraph "发现层 (Discovery)"
-        Trend --> |抓取与初筛| Source[数据源 (新闻/社交媒体)]
+        Trend --> |抓取与初筛| Source["数据源 (新闻/社交媒体)"]
     end
     
     Trend --> |原始信号| Logic[逻辑过滤器]
@@ -140,7 +140,7 @@ graph TD
     subgraph "输出层 (Output)"
         Report --> |Map-Reduce| Draft[分章节草稿]
         Draft --> |混合检索 RAG| Edit[统一审校]
-        Edit --> Final[最终报告 .md/.html]
+        Edit --> Final["最终报告 .md/.html"]
     end
 ```
 
