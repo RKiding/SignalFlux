@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 class TransmissionNode(BaseModel):
     node_name: str = Field(..., description="产业链节点名称")
@@ -74,9 +75,25 @@ class ClusterContext(BaseModel):
     """信号聚类结果结构"""
     clusters: List[SignalCluster] = Field(..., description="聚类列表")
 
+class KLinePoint(BaseModel):
+    date: str = Field(..., description="日期")
+    open: float = Field(..., description="开盘价")
+    high: float = Field(..., description="最高价")
+    low: float = Field(..., description="最低价")
+    close: float = Field(..., description="收盘价")
+    volume: float = Field(..., description="成交量")
+
+class ForecastResult(BaseModel):
+    ticker: str = Field(..., description="股票代码")
+    base_forecast: List[KLinePoint] = Field(default_factory=list, description="Kronos 模型原始预测")
+    adjusted_forecast: List[KLinePoint] = Field(default_factory=list, description="LLM 调整后的预测")
+    rationale: str = Field(default="", description="预测调整理由及逻辑说明")
+    timestamp: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"), description="生成时间")
+
 class InvestmentReport(BaseModel):
     overall_sentiment: str = Field(..., description="整体市场情绪评价")
     market_entropy: float = Field(..., description="市场分歧度 (0-1, 1代表极高分歧)")
     signals: List[InvestmentSignal] = Field(..., description="深度解析的投资信号列表")
+    forecasts: List[ForecastResult] = Field(default_factory=list, description="相关标的的预测结果")
     timestamp: str = Field(..., description="报告生成时间")
     meta_info: Optional[Dict[str, Any]] = Field(default_factory=dict, description="其他元数据")

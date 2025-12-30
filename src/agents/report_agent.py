@@ -14,7 +14,8 @@ from utils.hybrid_search import InMemoryRAG
 from utils.json_utils import extract_json
 from utils.stock_tools import StockTools
 import re
-from schema.models import InvestmentSignal, InvestmentReport, TransmissionNode, ClusterContext
+from schema.models import InvestmentSignal, InvestmentReport, TransmissionNode, ClusterContext, ForecastResult
+from agents.forecast_agent import ForecastAgent
 from prompts.report_agent import (
     get_report_planner_base_instructions,
     get_report_writer_base_instructions,
@@ -85,7 +86,304 @@ class ReportAgent:
             debug_mode=True
         )
         
+        # 6. Forecast Agent (lazy init: avoid heavy Kronos load unless actually requested)
+        self._forecast_agent: Optional[ForecastAgent] = None
+        
         logger.info(f"📝 ReportAgent initialized (incremental_edit={incremental_edit})")
+
+    def _get_forecast_agent(self) -> ForecastAgent:
+        if self._forecast_agent is None:
+            self._forecast_agent = ForecastAgent(self.db, self.model)
+        return self._forecast_agent
+
+    @staticmethod
+    def _clean_ticker(ticker_raw: str) -> str:
+        t = (ticker_raw or "").strip()
+        if not t:
+            return ""
+        if "," in t:
+            t = t.split(",")[0].strip()
+        if "." in t:
+            t = t.split(".")[0].strip()
+        digits = "".join([c for c in t if c.isdigit()])
+        return digits or t
+
+    @classmethod
+    def _signal_mentions_ticker(cls, signal: Any, ticker_digits: str) -> bool:
+        if not ticker_digits:
+            return False
+
+        def norm(s: str) -> str:
+            return cls._clean_ticker(s)
+
+        try:
+            # Prefer structured impact_tickers if present
+            impact = getattr(signal, 'impact_tickers', None) if not isinstance(signal, dict) else signal.get('impact_tickers')
+            if isinstance(impact, list):
+                for item in impact:
+                    if not isinstance(item, dict):
+                        continue
+                    t = item.get('ticker') or item.get('code') or item.get('symbol')
+                    if t and norm(str(t)) == ticker_digits:
+                        return True
+
+            # Fallback to text search
+            title_text = getattr(signal, 'title', '') if not isinstance(signal, dict) else signal.get('title', '')
+            summary_text = getattr(signal, 'summary', '') if not isinstance(signal, dict) else signal.get('summary', '')
+            analysis_text = getattr(signal, 'analysis', '') if not isinstance(signal, dict) else signal.get('analysis', '')
+            combined = f"{title_text} {summary_text} {analysis_text}"
+            return ticker_digits in combined
+        except Exception:
+            return False
+
+    def _extract_forecast_requests(self, text: str, context_window_chars: int = 1200) -> List[Dict[str, Any]]:
+        """Extract forecast requests from markdown content.
+
+        Returns list of dicts: {ticker, pred_len, title, context_snippet}
+        """
+        if not text:
+            return []
+
+        pattern = re.compile(r'```json-chart\s*(\{.*?\})\s*```', re.DOTALL)
+        requests: List[Dict[str, Any]] = []
+
+        for match in pattern.finditer(text):
+            json_str = match.group(1).strip()
+            cfg = extract_json(json_str)
+            if not cfg:
+                continue
+            if cfg.get('type') != 'forecast':
+                continue
+
+            ticker_raw = str(cfg.get('ticker', '')).strip()
+            ticker = self._clean_ticker(ticker_raw)
+            if not (ticker.isdigit() and len(ticker) in (5, 6)):
+                continue
+
+            try:
+                pred_len = int(cfg.get('pred_len', 5))
+            except Exception:
+                pred_len = 5
+            pred_len = max(1, min(pred_len, 20))
+
+            title = str(cfg.get('title') or f"{ticker_raw} 预测").strip()
+
+            # Prefer writer-provided final attribution over raw surrounding snippet.
+            # This supports the workflow: multi-scenario discussion in正文 -> final chosen scenario -> render ONE forecast chart.
+            structured_lines: List[str] = []
+            selected_scenario = cfg.get('selected_scenario') or cfg.get('scenario') or cfg.get('case')
+            selection_reason = cfg.get('selection_reason') or cfg.get('case_reason') or cfg.get('reason')
+            scenarios = cfg.get('scenarios')
+
+            if selected_scenario:
+                structured_lines.append(f"- 最可能情景: {str(selected_scenario).strip()}")
+            if selection_reason:
+                structured_lines.append(f"- 归因: {str(selection_reason).strip()}")
+            if isinstance(scenarios, list) and scenarios:
+                structured_lines.append("- 备选情景:")
+                for item in scenarios[:6]:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get('name', '')).strip()
+                    desc = str(item.get('description', '')).strip()
+                    prob = item.get('probability', None)
+                    prob_str = ""
+                    try:
+                        if prob is not None:
+                            prob_str = f" (p={float(prob):.2f})"
+                    except Exception:
+                        prob_str = ""
+                    line = "  - " + (name or "（未命名）")
+                    if desc:
+                        line += f": {desc}"
+                    line += prob_str
+                    structured_lines.append(line)
+
+            structured_context = ""
+            if structured_lines:
+                structured_context = "【最终归因/情景选择（作者在 forecast 块中给定）】\n" + "\n".join(structured_lines)
+
+            start = max(0, match.start() - context_window_chars)
+            end = min(len(text), match.end() + context_window_chars)
+            snippet = text[start:end]
+            # remove the code block itself from the snippet to reduce noise
+            snippet = snippet.replace(match.group(0), "").strip()
+            # remove any other json-chart blocks to avoid polluting forecast context
+            snippet = re.sub(r'```json-chart[\s\S]*?```', '', snippet).strip()
+
+            # If structured attribution exists, use it as the primary snippet; keep raw snippet as fallback.
+            context_snippet = structured_context or snippet
+            if len(context_snippet) > 3500:
+                context_snippet = context_snippet[:3500] + "\n\n（上下文过长已截断）"
+
+            requests.append({
+                'ticker': ticker,
+                'ticker_raw': ticker_raw,
+                'pred_len': pred_len,
+                'title': title,
+                'context_snippet': context_snippet,
+            })
+
+        return requests
+
+    def _build_forecast_map(self, report_text: str, signals: Optional[List[Any]] = None) -> Dict[tuple, ForecastResult]:
+        """Generate forecasts once per unique (ticker, pred_len) to ensure consistency across the report."""
+        reqs = self._extract_forecast_requests(report_text)
+        if not reqs:
+            return {}
+
+        # group by key, merge context
+        grouped: Dict[tuple, Dict[str, Any]] = {}
+        for r in reqs:
+            key = (r['ticker'], int(r['pred_len']))
+            g = grouped.get(key)
+            if not g:
+                grouped[key] = {
+                    'ticker': r['ticker'],
+                    'pred_len': int(r['pred_len']),
+                    'titles': {r['title']},
+                    'snippets': [r.get('context_snippet', '')],
+                }
+            else:
+                g['titles'].add(r['title'])
+                sn = r.get('context_snippet', '')
+                if sn and sn not in g['snippets']:
+                    g['snippets'].append(sn)
+
+        logger.info(f"🔮 Forecast requests: total={len(reqs)}, unique={len(grouped)}")
+
+        forecasts: Dict[tuple, ForecastResult] = {}
+        for key, g in grouped.items():
+            ticker, pred_len = key
+
+            related_signals: List[Any] = []
+            if signals:
+                for s in signals:
+                    if self._signal_mentions_ticker(s, str(ticker)):
+                        related_signals.append(s)
+
+            # merge context snippets (cap size)
+            merged_snippet = "\n\n---\n\n".join([s for s in g['snippets'] if s])
+            if len(merged_snippet) > 3500:
+                merged_snippet = merged_snippet[:3500] + "\n\n（上下文过长已截断）"
+
+            extra_context = ""
+            if merged_snippet:
+                extra_context = (
+                    "【报告写作上下文（来自章节正文，可能包含主观判断）】\n"
+                    + merged_snippet
+                )
+
+            try:
+                fc = self._get_forecast_agent().generate_forecast(
+                    str(ticker),
+                    related_signals,
+                    pred_len=int(pred_len),
+                    extra_context=extra_context
+                )
+                if fc:
+                    forecasts[key] = fc
+            except Exception as e:
+                logger.warning(f"⚠️ Forecast generation failed for {ticker} pred_len={pred_len}: {e}")
+
+        return forecasts
+
+    @staticmethod
+    def _sanitize_json_chart_blocks(text: str) -> str:
+        """Best-effort repair for malformed json-chart fenced blocks.
+
+        Common failure mode: model outputs an opening ```json-chart but forgets to close it.
+        That causes downstream chart processing to miss it and swallows the rest of the report.
+
+        Strategy:
+        - For each opening fence, locate the first JSON object and close the fence right after
+          the JSON object (balanced braces, ignoring braces inside strings).
+        - If a closing fence already exists after the JSON object, leave as-is.
+        """
+
+        if not text or "```json-chart" not in text:
+            return text
+
+        def find_json_end(s: str, start_idx: int) -> Optional[int]:
+            # find first '{'
+            i = s.find('{', start_idx)
+            if i == -1:
+                return None
+            depth = 0
+            in_str = False
+            escape = False
+            quote = '"'
+            for j in range(i, len(s)):
+                ch = s[j]
+                if in_str:
+                    if escape:
+                        escape = False
+                        continue
+                    if ch == '\\':
+                        escape = True
+                        continue
+                    if ch == quote:
+                        in_str = False
+                    continue
+
+                if ch == '"' or ch == "'":
+                    in_str = True
+                    quote = ch
+                    continue
+                if ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return j
+            return None
+
+        out = []
+        i = 0
+        needle = "```json-chart"
+        while True:
+            idx = text.find(needle, i)
+            if idx == -1:
+                out.append(text[i:])
+                break
+
+            # append preceding text
+            out.append(text[i:idx])
+
+            # keep the opening fence line
+            fence_line_end = text.find("\n", idx)
+            if fence_line_end == -1:
+                out.append(text[idx:])
+                break
+            fence_line_end += 1
+            out.append(text[idx:fence_line_end])
+
+            # attempt to find end of JSON object
+            json_end = find_json_end(text, fence_line_end)
+            if json_end is None:
+                # cannot repair; keep rest and stop
+                out.append(text[fence_line_end:])
+                break
+
+            # include JSON object (up to closing brace)
+            out.append(text[fence_line_end:json_end + 1])
+
+            # check if there's already a closing fence soon after
+            after_json = text[json_end + 1:]
+            closing_idx = after_json.find("```")
+            opening_idx2 = after_json.find(needle)
+
+            if closing_idx != -1 and (opening_idx2 == -1 or closing_idx < opening_idx2):
+                # existing closing fence; keep everything up to it as-is
+                out.append(after_json[:closing_idx + 3])
+                i = json_end + 1 + closing_idx + 3
+                continue
+
+            # missing closing fence: insert one
+            out.append("\n```\n")
+            i = json_end + 1
+
+        return "".join(out)
 
     def _cluster_signals(self, signals: List[Dict[str, Any]], user_query: str = None) -> List[Dict[str, Any]]:
         """
@@ -300,7 +598,12 @@ class ReportAgent:
         
         # --- Phase 5: Visualization Processing ---
         logger.info("🎨 Processing visualization...")
-        final_report_with_charts = self._process_charts(final_response_content)
+
+        # Repair malformed json-chart blocks (e.g. missing closing fence) before extraction/rendering
+        final_response_content = self._sanitize_json_chart_blocks(final_response_content)
+
+        forecast_map = self._build_forecast_map(final_response_content, signals)
+        final_report_with_charts = self._process_charts(final_response_content, signals, forecast_map=forecast_map)
         
         return final_report_with_charts
 
@@ -377,6 +680,11 @@ class ReportAgent:
         try:
             tail_response = self.editor.run("请生成参考文献、风险提示和快速扫描表格。")
             tail_content = self._clean_markdown(tail_response.content)
+
+            # Guardrail: some models ask the user for more info instead of generating the required sections.
+            bad_markers = ["为了完成您的请求", "我需要您提供", "请您提供", "请提供必要的细节"]
+            if any(m in tail_content for m in bad_markers) or ("参考文献" not in tail_content and "风险提示" not in tail_content):
+                raise ValueError("Tail content looks invalid; falling back")
             
             # 分离快速扫描和其他尾部内容
             quick_scan = ""
@@ -389,14 +697,13 @@ class ReportAgent:
         except Exception as e:
             logger.warning(f"⚠️ Tail content generation failed: {e}")
             quick_scan = ""
-            other_tail = f"""## 参考文献
-
-            {sources_list_text}
-
-            ## 风险提示
-
-            本报告由 AI 自动生成，仅供参考，不构成投资建议。
-            """
+            sources_clean = (sources_list_text or "").strip()
+            other_tail = (
+                "## 参考文献\n\n"
+                + (sources_clean + "\n\n" if sources_clean else "（无）\n\n")
+                + "## 风险提示\n\n"
+                + "本报告由 AI 自动生成，仅供参考，不构成投资建议。\n"
+            )
         
         # 5. 组装最终报告
         current_date = datetime.now().strftime('%Y-%m-%d')
@@ -446,15 +753,29 @@ class ReportAgent:
         return final_report.strip()
     
 
-    def _process_charts(self, content: str) -> str:
+    def _process_charts(self, content: str, signals: List[Dict[str, Any]] = None, forecast_map: Optional[Dict[tuple, ForecastResult]] = None) -> str:
         """解析 json-chart 代码块并替换为 HTML 链接/Iframe"""
         from utils.visualizer import VisualizerTools
         from utils.stock_tools import StockTools
         
         stock_tools = StockTools(self.db, auto_update=False)
 
+        # Cache rendered forecast HTML per (ticker, pred_len) to guarantee identical output across duplicates
+        rendered_forecast_html: Dict[tuple, str] = {}
+
         def replace_match(match):
             json_str = match.group(1).strip()
+            # Normalize smart quotes that frequently break JSON parsing.
+            json_str = (
+                json_str.replace("\u201c", '"')
+                .replace("\u201d", '"')
+                .replace("\u2018", "'")
+                .replace("\u2019", "'")
+                .replace("“", '"')
+                .replace("”", '"')
+                .replace("‘", "'")
+                .replace("’", "'")
+            )
             try:
                 config = extract_json(json_str)
                 if not config:
@@ -543,7 +864,7 @@ class ReportAgent:
                         logger.info(f"📊 Multiple tickers detected: {tickers}, generating charts for all")
                     
                     # 为每个 ticker 生成图表
-                    all_charts_html = []
+                    all_charts_html: List[str] = []
                     end_date = datetime.now().strftime("%Y-%m-%d")
                     start_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
                     
@@ -557,25 +878,36 @@ class ReportAgent:
                         df = stock_tools.get_stock_price(ticker, start_date=start_date, end_date=end_date)
                         
                         if not df.empty:
-                            # 如果有 prediction 且是多个 ticker，尝试分配预测值
-                            ticker_prediction = None
-                            if prediction and isinstance(prediction, list):
-                                # 假设预测值平均分配给每个 ticker
-                                chunk_size = len(prediction) // len(tickers) if len(tickers) > 1 else len(prediction)
-                                if chunk_size > 0:
-                                    start_idx = idx * chunk_size
-                                    end_idx = start_idx + chunk_size
-                                    ticker_prediction = prediction[start_idx:end_idx] if end_idx <= len(prediction) else prediction[start_idx:]
-                                if not ticker_prediction:
-                                    ticker_prediction = prediction[:3] if len(prediction) >= 3 else prediction
-                            
-                            chart = VisualizerTools.generate_stock_chart(df, ticker, chart_title, ticker_prediction)
+                            # Optional: attach Kronos forecast if explicitly requested
+                            forecast_obj = None
+                            if config.get("show_forecast", False) or config.get("forecast", False):
+                                try:
+                                    related_signals = []
+                                    if signals:
+                                        for s in signals:
+                                            analysis_text = getattr(s, 'analysis', '') if not isinstance(s, dict) else s.get('analysis', '')
+                                            title_text = getattr(s, 'title', '') if not isinstance(s, dict) else s.get('title', '')
+                                            full_text = f"{title_text} {analysis_text}"
+                                            if str(ticker) in full_text:
+                                                related_signals.append(s)
+                                    forecast_obj = self._get_forecast_agent().generate_forecast(ticker, related_signals)
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Forecast generation failed for {ticker}: {e}")
+                                    forecast_obj = None
+
+                            chart = VisualizerTools.generate_stock_chart(
+                                df,
+                                ticker,
+                                chart_title,
+                                prediction=prediction,
+                                forecast=forecast_obj
+                            )
+
                             if chart:
                                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                                filename = f"reports/charts/{ticker}_{timestamp}.html"
+                                filename = f"reports/charts/stock_{ticker}_{timestamp}.html"
                                 VisualizerTools.render_chart_to_file(chart, filename)
-                                
-                                rel_path = f"charts/{ticker}_{timestamp}.html"
+                                rel_path = f"charts/stock_{ticker}_{timestamp}.html"
                                 all_charts_html.append(
                                     f'<iframe src="{rel_path}" width="100%" height="500px" style="border:none;"></iframe>\n'
                                     f'<p style="text-align:center;color:gray;font-size:12px">交互式图表: {chart_title}</p>'
@@ -587,6 +919,96 @@ class ReportAgent:
                         return "\n" + "\n".join(all_charts_html) + "\n"
                     else:
                         return f"\n<!-- 无法获取股票数据: {ticker_raw} -->\n"
+
+                elif chart_type == "forecast":
+                    ticker_raw = config.get("ticker", "")
+                    title = config.get("title", f"{ticker_raw} 预测")
+                    pred_len = config.get("pred_len", 5)
+                    
+                    # Only allow one ticker for forecast (supports suffix like 002371.SZ / 9868.HK)
+                    t = str(ticker_raw).strip().split(',')[0].strip()
+                    clean_t = t.split('.')[0] if '.' in t else t
+                    clean_t = ''.join([c for c in clean_t if c.isdigit()]) or clean_t
+                    if not (clean_t.isdigit() and len(clean_t) in (5, 6)):
+                        return (
+                            f'\n<p style="text-align:center;color:#b45309;font-size:13px;'
+                            f'background:#fffbeb;padding:10px;border:1px dashed #f59e0b;border-radius:8px;">'
+                            f'⚠️ 暂不支持该股票代码的预测渲染：{ticker_raw}（仅支持 A 股 6 位 / 港股 5 位数字代码）。'
+                            f'</p>\n'
+                        )
+                    ticker = clean_t
+                    
+                    # Gather signals that mention this ticker
+                    related_signals = []
+                    if signals:
+                        for s in signals:
+                            # 辅助函数：从信号中提取所有相关的 ticker
+                            # 兼容字典和 Pydantic 模型
+                            analysis_text = getattr(s, 'analysis', '') if not isinstance(s, dict) else s.get('analysis', '')
+                            title_text = getattr(s, 'title', '') if not isinstance(s, dict) else s.get('title', '')
+                            full_text = f"{title_text} {analysis_text}"
+                            if ticker in full_text:
+                                related_signals.append(s)
+                    
+                    key = (ticker, int(pred_len) if str(pred_len).isdigit() else 5)
+
+                    if key in rendered_forecast_html:
+                        return rendered_forecast_html[key]
+
+                    forecast_obj = None
+                    if forecast_map and key in forecast_map:
+                        forecast_obj = forecast_map[key]
+                    else:
+                        # Backward-compatible fallback (may be inconsistent across duplicates)
+                        forecast_obj = self._get_forecast_agent().generate_forecast(ticker, related_signals, pred_len=pred_len)
+                    
+                    # Fetch history for rendering
+                    end_date = datetime.now().strftime("%Y-%m-%d")
+                    start_date = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+                    df = stock_tools.get_stock_price(ticker, start_date=start_date, end_date=end_date)
+                    
+                    if df.empty:
+                        html = f"<!-- 无法获取股票数据: {ticker} -->"
+                        rendered_forecast_html[key] = html
+                        return html
+
+                    if forecast_obj:
+                        chart = VisualizerTools.generate_stock_chart(df, ticker, title, forecast=forecast_obj)
+                        if chart:
+                            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                            filename = f"reports/charts/forecast_{ticker}_{timestamp}.html"
+                            VisualizerTools.render_chart_to_file(chart, filename)
+
+                            rel_path = f"charts/forecast_{ticker}_{timestamp}.html"
+                            html = (
+                                f'<iframe src="{rel_path}" width="100%" height="500px" style="border:none;"></iframe>\n'
+                                f'<p style="text-align:center;color:gray;font-size:12px">AI 深度预测: {title}</p>'
+                            )
+                            html += (
+                                f'\n<p style="font-size:13px; color:#555; background:#f9f9f9; padding:10px; '
+                                f'border-left:4px solid #9333ea;"><b>预测逻辑:</b> {forecast_obj.rationale}</p>\n'
+                            )
+                            rendered_forecast_html[key] = html
+                            return html
+
+                    # Fallback: forecast failed, still render history-only chart
+                    chart = VisualizerTools.generate_stock_chart(df, ticker, title)
+                    if chart:
+                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                        filename = f"reports/charts/stock_{ticker}_{timestamp}.html"
+                        VisualizerTools.render_chart_to_file(chart, filename)
+                        rel_path = f"charts/stock_{ticker}_{timestamp}.html"
+                        html = (
+                            f'<iframe src="{rel_path}" width="100%" height="500px" style="border:none;"></iframe>\n'
+                            f'<p style="text-align:center;color:gray;font-size:12px">（预测失败，已展示历史行情）{title}</p>'
+                        )
+                        rendered_forecast_html[key] = html
+                        return html
+
+                    html = f"<!-- FORECAST FAILED FOR {ticker} -->"
+                    rendered_forecast_html[key] = html
+                    return html
+
 
 
                 
@@ -672,9 +1094,22 @@ class ReportAgent:
                     )
                     if chart:
                         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                        filename = f"reports/charts/isq_{timestamp}.html"
+                        # Avoid collisions: multiple ISQ charts can be rendered within the same second.
+                        payload = {
+                            "type": "isq",
+                            "sentiment": sentiment,
+                            "confidence": confidence,
+                            "intensity": intensity,
+                            "expectation_gap": expectation_gap,
+                            "timeliness": timeliness,
+                            "title": title,
+                        }
+                        content_hash = hashlib.md5(
+                            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+                        ).hexdigest()[:8]
+                        filename = f"reports/charts/isq_{timestamp}_{content_hash}.html"
                         VisualizerTools.render_chart_to_file(chart, filename)
-                        rel_path = f"charts/isq_{timestamp}.html"
+                        rel_path = f"charts/isq_{timestamp}_{content_hash}.html"
                         return f'\n<iframe src="{rel_path}" width="100%" height="420px" style="border:none;"></iframe>\n<p style="text-align:center;color:gray;font-size:12px">信号质量雷达图: {title}</p>\n'
 
                 elif chart_type == "transmission":
@@ -704,5 +1139,17 @@ class ReportAgent:
         # 匹配 ```json-chart ... ```
         pattern = re.compile(r'```json-chart\s*(\{.*?\})\s*```', re.DOTALL)
         new_content = pattern.sub(replace_match, content)
-        
+
+        # Make invalid-forecast-ticker failures visible (older versions emitted HTML comments)
+        new_content = re.sub(
+            r'<!--\s*NO VALID TICKER FOR FORECAST:\s*([^>]+?)\s*-->',
+            lambda m: (
+                '\n<p style="text-align:center;color:#b45309;font-size:13px;'
+                'background:#fffbeb;padding:10px;border:1px dashed #f59e0b;border-radius:8px;">'
+                f'⚠️ 暂不支持该股票代码的预测渲染：{m.group(1).strip()}（仅支持 A 股 6 位 / 港股 5 位数字代码）。'
+                '</p>\n'
+            ),
+            new_content,
+        )
+
         return new_content

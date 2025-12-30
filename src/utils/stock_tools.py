@@ -76,7 +76,13 @@ class StockTools:
         search_query = aliases.get(clean_query.upper(), clean_query)
         return self.db.search_stock(search_query, limit)
 
-    def get_stock_price(self, ticker: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:
+    def get_stock_price(
+        self,
+        ticker: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        force_sync: bool = False,
+    ) -> pd.DataFrame:
         """
         获取指定股票的历史价格数据。优先从本地缓存读取，缺失时自动从网络补齐。
         
@@ -105,13 +111,17 @@ class StockTools:
             if (req_latest - db_latest).days > 2:
                 need_update = True
 
+        if force_sync:
+            need_update = True
+
         if need_update:
             logger.info(f"📡 Data stale or missing for {ticker}, syncing from network...")
             
             # 清洗 ticker，确保只包含数字（Akshare A 股接口通常只需要数字代码）
             clean_ticker = "".join(filter(str.isdigit, ticker))
             if not clean_ticker:
-                logger.error(f"❌ Invalid ticker format: {ticker}")
+                # Non A/H numeric tickers are not supported by the current data source.
+                logger.warning(f"⚠️ Unsupported ticker format (A/H only): {ticker}")
                 return df_db
 
             try:

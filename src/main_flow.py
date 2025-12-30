@@ -16,6 +16,8 @@ from schema.models import InvestmentSignal, InvestmentReport
 from agno.agent import Agent
 from utils.md_to_html import save_report_as_html
 from prompts.trend_agent import get_news_filter_instructions
+from utils.checkpointing import CheckpointManager, resolve_latest_run_id
+from utils.logging_setup import setup_file_logging, make_run_id
 
 class SignalFluxWorkflow:
     """
@@ -118,7 +120,16 @@ class SignalFluxWorkflow:
     TECH_SOURCES = ["36kr", "ithome", "v2ex", "juejin", "hackernews"]
     ALL_SOURCES = FINANCIAL_SOURCES + SOCIAL_SOURCES + TECH_SOURCES
     
-    def run(self, sources: List[str] = None, wide: int = 10, depth: Union[int, str] = 'auto', query: Optional[str] = None) -> Optional[str]:
+    def run(
+        self,
+        sources: List[str] = None,
+        wide: int = 10,
+        depth: Union[int, str] = 'auto',
+        query: Optional[str] = None,
+        run_id: Optional[str] = None,
+        resume: bool = False,
+        checkpoint_dir: str = "reports/checkpoints",
+    ) -> Optional[str]:
         """执行完整工作流
         
         Args:
@@ -130,8 +141,43 @@ class SignalFluxWorkflow:
         Returns:
             生成的报告文件路径，或 None（如果失败）
         """
+        # Resolve run_id and checkpoint manager
+        if resume and not run_id:
+            run_id = resolve_latest_run_id(checkpoint_dir)
+            if not run_id:
+                logger.warning("⚠️ resume requested but no checkpoint runs found; starting fresh")
+        run_id = run_id or datetime.now().strftime('%Y%m%d_%H%M%S')
+        ckpt = CheckpointManager(base_dir=checkpoint_dir, run_id=run_id)
+        os.makedirs(ckpt.run_dir, exist_ok=True)
+
+        ckpt.save_json(
+            "state.json",
+            {
+                "run_id": run_id,
+                "resume": bool(resume),
+                "started_at": datetime.now().isoformat(),
+                "params": {"sources": sources, "wide": wide, "depth": depth, "query": query},
+                "status": "running",
+            },
+        )
+
         if sources is None:
             sources = ["all"]
+
+        # Fast resume paths
+        if resume and ckpt.exists("report.md"):
+            logger.info(f"♻️ Resuming: found final report checkpoint for run_id={run_id}")
+            report_md = ckpt.load_text("report.md")
+            if report_md:
+                report_dir = "reports"
+                os.makedirs(report_dir, exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+                md_filename = f"{report_dir}/daily_report_{timestamp}.md"
+                with open(md_filename, "w", encoding="utf-8") as f:
+                    f.write(report_md)
+                html_filename = save_report_as_html(md_filename)
+                ckpt.save_json("state.json", {"run_id": run_id, "status": "completed", "resumed_from": "report.md", "finished_at": datetime.now().isoformat()})
+                return html_filename or md_filename
             
         logger.info("--- Step 1: Trend Discovery ---")
         
@@ -140,6 +186,7 @@ class SignalFluxWorkflow:
         if query:
             logger.info(f"🧠 Analyzing intent for: {query}")
             intent_info = self.intent_agent.run(query)
+            ckpt.save_json("intent.json", intent_info)
         
         # 1. 解析 sources 参数
         if "all" in sources:
@@ -169,6 +216,14 @@ class SignalFluxWorkflow:
                 logger.warning(f"⚠️ Source '{source}' failed: {e}, skipping")
         
         logger.info(f"✅ Successfully fetched from {len(successful_sources)}/{len(actual_sources)} sources")
+        ckpt.save_json(
+            "trend_sources.json",
+            {
+                "actual_sources": actual_sources,
+                "successful_sources": successful_sources,
+                "wide": wide,
+            },
+        )
             
         # --- NEW: Active Search based on Intent ---
         search_signals = []
@@ -195,6 +250,7 @@ class SignalFluxWorkflow:
                             "id": r.get('id') or f"search_{hash(r.get('url'))}"
                         })
                 logger.info(f"🔍 Found {len(search_signals)} signals via search")
+                ckpt.save_json("search_signals.json", {"query": query, "items": search_signals})
 
         # 2. 批量更新情绪分数 (保留，用于可视化)
         logger.info("Calculating sentiment scores...")
@@ -209,6 +265,15 @@ class SignalFluxWorkflow:
         if not raw_news:
             logger.warning("No news found in database.")
             return
+
+        ckpt.save_json(
+            "raw_news_meta.json",
+            {
+                "db_news_count": len(db_news) if db_news else 0,
+                "search_signals_count": len(search_signals),
+                "raw_news_count": len(raw_news),
+            },
+        )
         
         # 4. 智能筛选（LLM 或传统方式）
         # 如果有 query，即使数量少也建议走 LLM 筛选以匹配相关性
@@ -225,52 +290,86 @@ class SignalFluxWorkflow:
                 )[:depth]
             else:
                 high_value_signals = raw_news
+
+        # Store a light checkpoint to resume analysis without rerunning filter
+        try:
+            hv_meta = []
+            for n in high_value_signals:
+                hv_meta.append({
+                    "id": n.get("id"),
+                    "title": n.get("title"),
+                    "url": n.get("url"),
+                    "source": n.get("source"),
+                    "sentiment_score": n.get("sentiment_score"),
+                })
+            ckpt.save_json("high_value_signals.json", {"count": len(high_value_signals), "items": hv_meta})
+        except Exception:
+            pass
             
         logger.info(f"--- Step 2: Financial Analysis ({len(high_value_signals)} signals) ---")
 
         
         analyzed_signals = []
+
+        # Resume from analyzed_signals checkpoint if available
+        if resume and ckpt.exists("analyzed_signals.json"):
+            logger.info(f"♻️ Resuming: loading analyzed signals from checkpoint run_id={run_id}")
+            analyzed_cached = ckpt.load_json("analyzed_signals.json", default=[])
+            if isinstance(analyzed_cached, list) and analyzed_cached:
+                analyzed_signals = analyzed_cached
         
-        for signal in high_value_signals:
-            logger.info(f"Analyzing: {signal['title']}")
-            
-            # 1. 优先从数据库中寻找同一 signal_id 的深度解析 (ISQ)
-            # 这里可以用一个专门的 get_signal 方法，目前我们先看 news 表是否有 analysis 字段缓存（旧逻辑驱动）
-            # 或者直接看 signals 表
-            
-            # 2. 构造上下文
-            content = signal.get("content") or ""
-            if len(content) < 50 and signal.get("url"):
-                content = self.trend_agent.news_toolkit.fetch_news_content(signal["url"]) or ""
-            input_text = f"【{signal['title']}】\n{content[:3000]}"
-            
-            try:
-                # 调用 FinAgent 执行 ISQ 解析
-                sig_obj = self.fin_agent.analyze_signal(input_text, news_id=signal.get("id"))
-                
-                if sig_obj:
-                    # 补充来源信息 (如果模型没填全)
-                    if not sig_obj.sources and signal.get("url"):
-                        sig_obj.sources = [{"title": signal["title"], "url": signal["url"], "source_name": signal.get("source", "Unknown")}]
-                    
-                    # 保存到深度信号表
-                    self.db.save_signal(sig_obj.dict())
-                    analyzed_signals.append(sig_obj)
-                    
-                    # 同步回 news 表（旧逻辑兼容）
-                    if signal.get("id"):
-                        self.db.update_news_content(signal["id"], analysis=sig_obj.summary)
-                else:
-                    logger.warning(f"Could not get structured analysis for {signal['title']}, skipping")
-            except Exception as e:
-                logger.error(f"Analysis failed for {signal['title']}: {e}")
+        if analyzed_signals:
+            logger.info(f"✅ Using {len(analyzed_signals)} analyzed signals from checkpoint")
+        else:
+
+            for signal in high_value_signals:
+                logger.info(f"Analyzing: {signal['title']}")
+
+                # 2. 构造上下文
+                content = signal.get("content") or ""
+                if len(content) < 50 and signal.get("url"):
+                    content = self.trend_agent.news_toolkit.fetch_news_content(signal["url"]) or ""
+                input_text = f"【{signal['title']}】\n{content[:3000]}"
+
+                try:
+                    # 调用 FinAgent 执行 ISQ 解析
+                    sig_obj = self.fin_agent.analyze_signal(input_text, news_id=signal.get("id"))
+
+                    if sig_obj:
+                        # 补充来源信息 (如果模型没填全)
+                        if not sig_obj.sources and signal.get("url"):
+                            sig_obj.sources = [{"title": signal["title"], "url": signal["url"], "source_name": signal.get("source", "Unknown")}]
+
+                        # 保存到深度信号表
+                        self.db.save_signal(sig_obj.dict())
+                        analyzed_signals.append(sig_obj.dict())
+
+                        # 同步回 news 表（旧逻辑兼容）
+                        if signal.get("id"):
+                            self.db.update_news_content(signal["id"], analysis=sig_obj.summary)
+
+                        # Incremental checkpoint every success to enable resume
+                        if len(analyzed_signals) % 3 == 0:
+                            ckpt.save_json("analyzed_signals.json", analyzed_signals)
+                    else:
+                        logger.warning(f"Could not get structured analysis for {signal['title']}, skipping")
+                except Exception as e:
+                    logger.error(f"Analysis failed for {signal['title']}: {e}")
+
+            ckpt.save_json("analyzed_signals.json", analyzed_signals)
 
         
         logger.info("--- Step 3: Report Generation ---")
-        
-        result = self.report_agent.generate_report(analyzed_signals, user_query=query)
-        # Use a generic name 'report' but note it might be a string now (generate_report returns str)
-        report = result
+
+        # Resume from report markdown checkpoint (pre-render)
+        if resume and ckpt.exists("report.md"):
+            logger.info(f"♻️ Resuming: using report.md checkpoint for run_id={run_id}")
+            md_content = ckpt.load_text("report.md")
+        else:
+            result = self.report_agent.generate_report(analyzed_signals, user_query=query)
+            report = result
+            md_content = report.content if hasattr(report, "content") else str(report)
+            ckpt.save_text("report.md", md_content)
         
         # 保存报告
         report_dir = "reports"
@@ -279,8 +378,6 @@ class SignalFluxWorkflow:
         md_filename = f"{report_dir}/daily_report_{timestamp}.md"
         
         with open(md_filename, "w", encoding="utf-8") as f:
-            # Handle both RunResponse object and raw string
-            md_content = report.content if hasattr(report, "content") else str(report)
             f.write(md_content)
         
         # 转换为 HTML (默认)
@@ -289,7 +386,9 @@ class SignalFluxWorkflow:
         logger.info(f"✅ Report generated: {md_filename}")
         if html_filename:
             logger.info(f"🌐 HTML Report available: {html_filename}")
+            ckpt.save_json("state.json", {"run_id": run_id, "status": "completed", "finished_at": datetime.now().isoformat(), "output": html_filename})
             return html_filename
+        ckpt.save_json("state.json", {"run_id": run_id, "status": "completed", "finished_at": datetime.now().isoformat(), "output": md_filename})
         return md_filename
 
 if __name__ == "__main__":
@@ -307,6 +406,11 @@ if __name__ == "__main__":
                         help="Report depth: 'auto' or integer limit (default: auto)")
     parser.add_argument("--query", type=str, default=None, 
                         help="User query/intent (optional)")
+    parser.add_argument("--run-id", type=str, default=None, help="Run id for logs/checkpoints (default: timestamp)")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest (or --run-id) checkpoint")
+    parser.add_argument("--checkpoint-dir", type=str, default="reports/checkpoints", help="Checkpoint base dir")
+    parser.add_argument("--log-dir", type=str, default="logs", help="Log directory")
+    parser.add_argument("--log-level", type=str, default="DEBUG", help="Log level (INFO/DEBUG/...) ")
     
     args = parser.parse_args()
     
@@ -322,5 +426,29 @@ if __name__ == "__main__":
     except ValueError:
         depth = args.depth
     
+    run_id = args.run_id or make_run_id()
+    log_path = setup_file_logging(run_id=run_id, log_dir=args.log_dir, level=args.log_level)
+    logger.info(f"🧾 Log file: {log_path}")
+
     workflow = SignalFluxWorkflow(isq_template_id=args.template)
-    workflow.run(sources=sources, wide=args.wide, depth=depth, query=args.query)
+    try:
+        workflow.run(
+            sources=sources,
+            wide=args.wide,
+            depth=depth,
+            query=args.query,
+            run_id=run_id,
+            resume=bool(args.resume),
+            checkpoint_dir=args.checkpoint_dir,
+        )
+    except Exception as e:
+        # Best-effort crash record
+        try:
+            ckpt = CheckpointManager(base_dir=args.checkpoint_dir, run_id=run_id)
+            ckpt.save_json(
+                "state.json",
+                {"run_id": run_id, "status": "failed", "error": str(e), "failed_at": datetime.now().isoformat()},
+            )
+        except Exception:
+            pass
+        raise

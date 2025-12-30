@@ -196,18 +196,49 @@ def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, s
     
     **可选图表类型 (请根据内容选择最合适的 1-2 种):**
 
-    **A. 股价趋势与预测 (Stock Trend) - 【强烈推荐】**
-    *适用*: 当文中明确提及某上市公司时，**必须**使用此图表展示股价走势和预测。
+    **A. AI 预测 + 走势 (Forecast) - 【强烈推荐 / 最新规范】**
+    *适用*: 当文中明确提及某上市公司时，**必须**使用此图表展示股价走势与 AI 预测。
     *必填字段*:
-    - `ticker`: 6位股票代码，如 "600519" 或带后缀 "600519.SH"
-    - `prediction`: 未来3-5日的预测价格数组
+    - `ticker`: 股票代码，A股 6 位 / 港股 5 位，允许带后缀（如 "002371.SZ"、"9868.HK"）
+    - `pred_len`: 预测交易日长度（建议 3 或 5）
     *代码示例*:
     ```json-chart
-    {{"type": "stock", "ticker": "600519", "title": "贵州茅台趋势预测", "prediction": [1850, 1880, 1920]}}
+    {{"type": "forecast", "ticker": "002371.SZ", "title": "北方华创（002371）T+5 预测", "pred_len": 5}}
     ```
-    *注意*: 如果提及多只股票，应为每只生成独立的股价图表。
+    **重要**：禁止手写 `prediction` 数组（预测由系统自动生成并渲染）。
+    *注意*: 如果提及多只股票，应为每只生成独立的 forecast 图表。
 
-    **B. 舆情情绪演变 (Sentiment Trend)**
+        **【推荐写法：多情景 → 最终归因 → 产出唯一预测图】**
+        你可以在正文里描述多种情景（如：基准/乐观/悲观），但在插入预测图之前，必须明确给出“本报告最终选择的最可能情景”及其归因，然后用 `forecast` 图表做最终总结。
+        为了让系统把“最终归因”可靠地传递给预测模块，请在 `forecast` JSON 中可选补充以下字段（字段均为可选，越完整越好）：
+        - `selected_scenario`: 最可能情景名称（如 "基准" / "乐观" / "悲观"）
+        - `selection_reason`: 选择该情景的归因理由（1-3 句）
+        - `scenarios`: 情景列表（数组），每个元素可包含 `name`、`description`、`probability`（0-1）
+        *示例*:
+        ```json-chart
+        {{
+            "type": "forecast",
+            "ticker": "002371.SZ",
+            "title": "北方华创（002371）T+5 预测（基准情景）",
+            "pred_len": 5,
+            "selected_scenario": "基准",
+            "selection_reason": "结合订单能见度与行业景气，基准情景概率最高；短期扰动主要来自估值与市场风险偏好。",
+            "scenarios": [
+                {{"name": "乐观", "description": "国产替代与资本开支超预期", "probability": 0.25}},
+                {{"name": "基准", "description": "订单稳健、利润率小幅波动", "probability": 0.55}},
+                {{"name": "悲观", "description": "需求回落或交付节奏放缓", "probability": 0.20}}
+            ]
+        }}
+        ```
+
+    **B. 历史走势 (Stock) - 仅作为兼容兜底**
+    *适用*: 当你无法给出预测时（例如无法确定标的），可仅展示历史走势。
+    *代码示例*:
+    ```json-chart
+    {{"type": "stock", "ticker": "002371", "title": "北方华创历史走势"}}
+    ```
+
+    **C. 舆情情绪演变 (Sentiment Trend)**
     *适用*: 当讨论行业政策、突发事件（如“火灾”、“新规”）的民意变化时。
     *注意*: `keywords` 必须是事件核心词。
     *代码*:
@@ -215,7 +246,7 @@ def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, s
     {{"type": "sentiment", "keywords": ["建筑安全", "防火标准"], "title": "市场对防火新规的情绪演变"}}
     ```
 
-    **C. 逻辑传导链条 (Transmission Chain)**
+    **D. 逻辑传导链条 (Transmission Chain)**
     *适用*: 复杂的蝴蝶效应分析（支持分支结构）。
     *代码*:
     ```json-chart
@@ -232,7 +263,7 @@ def get_report_writer_instructions(theme_title: str, signal_cluster_text: str, s
     ```
     *说明*: 使用 `source` 字段指定父节点名称以创建分支结构。
     
-    **D. 信号质量评估 (ISQ Radar)**
+    **E. 信号质量评估 (ISQ Radar)**
     *适用*: 对某个关键信号进行多维度（确定性、预期差等）定性评估时。
     *代码*:
     ```json-chart
@@ -345,7 +376,7 @@ def get_final_assembly_instructions(sources_list: str) -> str:
     return f"""你是一位研报主笔。请完成以下任务：
 
     ### 任务
-    1. 生成 "## 参考文献" 章节：
+    1. 生成 "## 参考文献" 章节（需要按照顺序，顺序不对时进行调整）：
     - 原始来源：
     {sources_list}
     - 格式：`<a id="ref编号"></a>[编号] 标题 (来源), [链接地址]`

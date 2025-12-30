@@ -15,71 +15,133 @@ class VisualizerTools:
         df: pd.DataFrame, 
         ticker: str, 
         title: str = None,
-        prediction: Optional[List[float]] = None
+        prediction: Optional[List[float]] = None,
+        forecast: Optional[Any] = None # ForecastResult instance
     ) -> Grid:
         """
-        生成股票 K 线图 + 成交量 + 预测趋势(可选)
+        生成股票 K 线图 + 成交量 + 预测趋势 (支持多状态 K 线)
         """
         if df.empty:
             return None
 
         # 数据预处理
         df = df.sort_values('date')
-        dates = df['date'].tolist()
+        dates = [str(d)[:10] for d in df['date'].tolist()]
         k_data = df[['open', 'close', 'low', 'high']].values.tolist()
         volumes = df['volume'].tolist()
         
         if not title:
             title = f"{ticker} 股价走势与预测"
             
-        # 处理预测数据
-        line = None
-        if prediction:
+        legend_items = ["日K"]
+        
+        # 1. 处理传统的简单预测线 (Line)
+        pred_line = None
+        if prediction and not forecast:
             try:
-                # 生成未来日期
-                last_date = datetime.strptime(str(dates[-1]), "%Y-%m-%d")
+                last_date_str = dates[-1]
+                last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
+                
                 pred_dates = []
                 for i in range(1, len(prediction) + 1):
                     pred_dates.append((last_date + timedelta(days=i)).strftime("%Y-%m-%d"))
                 
-                # 扩展数据
-                dates = dates + pred_dates
-                # K线补空
-                k_data = k_data + [[None, None, None, None]] * len(prediction)
-                # 成交量补空
-                volumes = volumes + [0] * len(prediction)
-                
-                # 预测线数据: 前面全 None，最后一个实盘 + 预测值
+                ext_dates = dates + pred_dates
                 last_close = df.iloc[-1]['close']
                 pred_values = [None] * (len(df) - 1) + [float(last_close)] + prediction
                 
-                logger.info(f"📈 Prediction data for {ticker}: {prediction}")
-                
-                line = (
+                pred_line = (
                     Line()
-                    .add_xaxis(dates)
+                    .add_xaxis(ext_dates)
                     .add_yaxis(
-                        "AI预测",
+                        "AI预测趋势",
                         pred_values,
                         is_connect_nones=True,
                         is_symbol_show=True,
                         linestyle_opts=opts.LineStyleOpts(width=2, type_="dashed", color="#FF8C00"),
-                        label_opts=opts.LabelOpts(is_show=True)
+                        label_opts=opts.LabelOpts(is_show=False)
                     )
                 )
+                dates = ext_dates
+                legend_items.append("AI预测趋势")
             except Exception as e:
-                logger.error(f"Failed to process prediction data: {e}")
+                logger.error(f"Failed to process simple prediction: {e}")
 
-        # 1. K线图
+        # 2. 处理复杂的 Kronos 预测 (Kline)
+        base_kline = None
+        adj_kline = None
+        
+        if forecast:
+            try:
+                # 获取预测数据点
+                base_points = forecast.base_forecast # List[KLinePoint]
+                adj_points = forecast.adjusted_forecast # List[KLinePoint]
+                
+                # 提取日期
+                pred_dates = [str(p.date)[:10] for p in (adj_points or base_points)]
+                
+                # 检查日期是否已经包含在主 dates 中，如果没有则扩展
+                if pred_dates and pred_dates[0] not in dates:
+                    dates = dates + pred_dates
+                
+                # 构建 Baseline 预测 K 线数据
+                if base_points:
+                    # 前面填充 None
+                    base_k_data = [[None]*4] * len(df) + [[p.open, p.close, p.low, p.high] for p in base_points]
+                    base_kline = (
+                        Kline()
+                        .add_xaxis(dates)
+                        .add_yaxis(
+                            "模型原始预测",
+                            base_k_data,
+                            itemstyle_opts=opts.ItemStyleOpts(
+                                color="transparent",
+                                color0="transparent",
+                                border_color="#FF8C00", # 橙色
+                                border_color0="#FF8C00",
+                                opacity=0.6,
+                                border_type="dashed"
+                            ),
+                        )
+                    )
+                    legend_items.append("模型原始预测")
+
+                # 构建 Adjusted 调优 K 线数据
+                if adj_points:
+                    adj_k_data = [[None]*4] * len(df) + [[p.open, p.close, p.low, p.high] for p in adj_points]
+                    adj_kline = (
+                        Kline()
+                        .add_xaxis(dates)
+                        .add_yaxis(
+                            "LLM调优预测",
+                            adj_k_data,
+                            itemstyle_opts=opts.ItemStyleOpts(
+                                color="#9333ea", # 紫色
+                                color0="#9333ea",
+                                border_color="#9333ea",
+                                border_color0="#9333ea",
+                                opacity=0.8
+                            ),
+                        )
+                    )
+                    legend_items.append("LLM调优预测")
+                    
+            except Exception as e:
+                logger.error(f"Failed to process complex forecast: {e}")
+
+        # 3. 主 K 线图
+        # 为了展示预测，也需要对主 K 线数据进行填充
+        main_k_data = k_data + [[None]*4] * (len(dates) - len(df))
+        
         kline = (
             Kline()
             .add_xaxis(dates)
             .add_yaxis(
                 "日K",
-                k_data,
+                main_k_data,
                 itemstyle_opts=opts.ItemStyleOpts(
-                    color="#ef4444",  # Close < Open (Bearish/Red)
-                    color0="#22c55e", # Close > Open (Bullish/Green)
+                    color="#ef4444",  # 跌
+                    color0="#22c55e", # 涨
                     border_color="#ef4444",
                     border_color0="#22c55e",
                 ),
@@ -94,21 +156,26 @@ class VisualizerTools:
                     ),
                 ),
                 legend_opts=opts.LegendOpts(is_show=True, pos_top="5%"),
-                datazoom_opts=[opts.DataZoomOpts(type_="inside")],
+                datazoom_opts=[opts.DataZoomOpts(type_="inside", range_start=50)],
                 tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross"),
             )
         )
         
-        if line:
-            kline.overlap(line)
+        # Overlap all series
+        if pred_line: kline.overlap(pred_line)
+        if base_kline: kline.overlap(base_kline)
+        if adj_kline: kline.overlap(adj_kline)
 
-        # 3. 成交量柱状图
+        # 4. 成交量柱状图
+        # 同理扩展成交量数据
+        ext_volumes = volumes + [0] * (len(dates) - len(df))
+        
         bar = (
             Bar()
             .add_xaxis(dates)
             .add_yaxis(
                 "成交量",
-                volumes,
+                ext_volumes,
                 xaxis_index=1,
                 yaxis_index=1,
                 label_opts=opts.LabelOpts(is_show=False),
@@ -124,7 +191,7 @@ class VisualizerTools:
             )
         )
 
-        # 4. 组合 Grid
+        # 5. 组合 Grid
         grid_chart = Grid(init_opts=opts.InitOpts(width="100%", height="450px", theme=ThemeType.LIGHT))
         grid_chart.add(
             kline,

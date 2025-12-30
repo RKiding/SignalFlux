@@ -8,3 +8,8 @@
 3. 新闻的召回一方面可以增加API的来源（已经写好的polymarket tool还没有接入），另一方面可以引入搜索、推荐算法的一些架构，从召回、粗排、精排、（多样性）等步骤来优化召回的效果
 
 4. 待定：ReAct模式或者LangGraph等框架的引入；更多股票API的引入（以支持美股等标的）
+
+5. search ticker或许可以加入板块信息，增强模糊查询。
+    新闻内容抓取失败的（重试后），可以添加规则快速过滤
+
+6. readme加上ack，agno、newsnow、kronos、deepfund等
