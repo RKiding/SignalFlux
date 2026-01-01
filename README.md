@@ -21,15 +21,10 @@
 
   <!-- 预留演示内容位置 -->
   <br/><br/>
-Click the preview below to see a generated sample report:
+Click the preview below to see some generated sample reports:
 
-[![Report Preview](assets/report_preview.svg)](assets/examples/demo_report.html)
+[![Report Preview](assets/report_preview.svg)](https://rkiding.github.io/signalflux/)
 
-This demo is based on a real-world analysis of a **Fire Safety Regulation Event**, featuring:
-1.  **Quick Scan Dashboard**: High-level signal assessment.
-2.  **Logic Transmission Chain**: Visualizing causal relationships.
-3.  **ISQ Assessment**: Quantitative scoring of signal quality.
-4.  **T+N Pricing Game**: Identifying arbitrage windows.
 </div>
 
 ---

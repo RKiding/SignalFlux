@@ -24,13 +24,8 @@
   <!-- <img src="assets/demo.gif" alt="SignalFlux Demo" width="800"> -->
   点击下方预览图查看生成的研报样例：
 
-[![报告预览](assets/report_preview.svg)](assets/examples/demo_report.html)
+[![报告预览](assets/report_preview.svg)](https://rkiding.github.io/signalflux/)
 
-这份样例演示了系统如何分析一个真实的**消防安全监管事件**，主要包含：
-1.  **快速扫描仪表盘**: 包含强度/置信度评分的高层信号总览。
-2.  **逻辑传导链**: 可视化展示新闻事件如何传导至具体个股。
-3.  **ISQ 质量评估**: 对信号质量进行多维度的量化评分。
-4.  **T+N 定价博弈**: 分析市场预期差与套利窗口。
 </div>
 
 ---
