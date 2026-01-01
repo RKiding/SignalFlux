@@ -58,9 +58,10 @@ SignalFlux 专为金融分析师、量化研究员和个人投资者设计，旨
 
 - **多智能体协作**: 具备趋势发现、金融分析和研报撰写专长的智能体协同工作。
 - **全网数据覆盖**: 通过 `NewsToolkit` 接入微博、财联社、华尔街见闻等 15+ 核心数据源。
-- **双模型路由架构**: 优化路由机制，将复杂逻辑交给“推理模型”（如 GPT-4o），将数据获取交给“工具模型”（如 Qwen/Ollama）。
+- **引入新闻感知的时序模型**: 基于 **Kronos** 结合新闻投影层，实现对股价冲击的量化预测。
+- **可视化研报与逻辑图**: 生成包含交互式 **Draw.io** 逻辑传导图的高质量 HTML 研报。
+- **双模型路由架构**: 优化路由机制，将复杂逻辑交给“推理模型”（如 GPT-5.2），将数据获取交给“工具模型”（如 Ollama）。
 - **混合检索引擎**: 结合 BM25（关键词匹配）和向量搜索（语义匹配），实现精准的信息召回。
-- **可视化研报**: 自动生成包含交互式图表和信号逻辑图的 Markdown/HTML 报告。
 
 ---
 
@@ -146,7 +147,8 @@ graph TD
     
     subgraph "预测层 (Prediction)"
         Report --> Forecast[预测 Agent]
-        Forecast --> |基础预测| Kronos[Kronos 模型]
+        Forecast --> |新闻嵌入| NewsProj[新闻投影层]
+        NewsProj --> Kronos[Kronos 模型]
         Forecast --> |专家修正| LLM[LLM 修正]
     end
     
@@ -156,6 +158,20 @@ graph TD
         Edit --> Final["最终报告 .md/.html"]
     end
 ```
+
+## 🧠 新闻感知 Kronos 模型
+SignalFlux 的核心创新之一是在 Kronos 基础模型中集成了**少样本新闻投影层 (few-shot news-projection layer)**。这使得系统不仅能基于历史价格进行预测，还能理解新闻事件对市场的量化冲击。
+
+<div align="center">
+  <img src="assets/news_bias.png" alt="新闻偏差注入机制" width="600">
+  <p><i>新闻感知投影机制：将语义嵌入映射到模型的潜空间。</i></p>
+</div>
+
+- **投影层 (Projection Layer)**: 一个轻量级的线性层，将 SentenceTransformer 嵌入映射到 Kronos 的隐状态空间。
+- **全局偏置 (Global Shift)**: 投影后的新闻偏置被加到所有时间步的隐层表示中，在最终预测前改变模型的“潜意图”。
+- **模型训练**: 在经过 LLM 验证的“新闻-波动”对合成数据集上进行微调。
+
+---
 
 ### 核心组件
 1.  **工作流层 (`main_flow.py`)**: 负责全局状态管理与执行路径编排，支持断点续传（Checkpoints）。
@@ -206,17 +222,19 @@ uv run pytest src/tests/
 
 ### 第一阶段：增强可视化与信号质量
 - [x] **语义可视化**: 关联拓扑图 (Transmission Graph) 与 ISQ 雷达图。
+- [x] **交互式图表**: 使用 **Draw.io** (MxGraph) 生成可编辑、专业的逻辑传导链。
 - [x] **信号漏斗**: 基于 ISQ 模板的量化评分筛选通道。
-- [ ] **Polymarket 集成**: 引入预测市场数据作为信号源。
 
 ### 第二阶段：高阶推理
-- [x] **时序模型集成**: 已接入 [Kronos](https://github.com/shiyu-coder/Kronos) 进行预测 K 线建模。
+- [x] **时序模型集成**: 已接入 **Kronos** 进行预测 K 线建模。
+- [x] **新闻感知投影**: 训练了用于注入新闻冲击语义的线性投影层。
 - [x] **AI 预测修正**: 多智能体协同基于新闻背景修正时序预测及其归因。
 
 ### 第三阶段：基础设施升级
 - [x] **混合检索升级**: 实现基于 RRF 的 BM25 与向量搜索融合检索。
 - [ ] **美股支持**: 增加 Alpha Vantage/Yahoo Finance 适配器。
 - [ ] **LangGraph 迁移**: 探索图结构状态管理以处理更复杂的循环逻辑。
+- [ ] **Polymarket 集成**: 引入预测市场数据作为信号源。
 
 ---
 

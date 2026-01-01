@@ -57,9 +57,10 @@ SignalFlux is designed for financial analysts, quantitative researchers, and ind
 
 - **Multi-Agent Collaboration**: Specialized agents for Trend Spotting, Financial Analysis, and Report Writing working in concert.
 - **15+ Data Sources**: Comprehensive coverage including Weibo, Cailian Press, Wall Street News, and more via `NewsToolkit`.
-- **Dual-Model Architecture**: Optimized routing between "Reasoning Models" (e.g., GPT-4o) for logic and "Tool Models" (e.g., Qwen/Ollama) for data fetching.
+- **News-Aware Time-Series Model**: Custom **Kronos** integration with a news-projection layer for predicting price shocks.
+- **Visualized Reports & Logic Graphs**: High-fidelity HTML reports featuring interactive **Draw.io** diagrams for logic transmission.
+- **Dual-Model Architecture**: Optimized routing between "Reasoning Models" (e.g., GPT-5.2) for logic and "Tool Models" (e.g., Ollama).
 - **Hybrid RAG Engine**: Combines BM25 (keyword) and Vector Search (semantic) for precise information retrieval.
-- **Visualized Reports**: Automatically generates Markdown/HTML reports with interactive charts and signal logic graphs.
 
 ---
 
@@ -145,7 +146,8 @@ graph TD
     
     subgraph "Prediction Layer"
         Report --> Forecast[Forecast Agent]
-        Forecast --> |Base| Kronos[Kronos Model]
+        Forecast --> |News Embeddings| NewsProj[News Projection Layer]
+        NewsProj --> Kronos[Kronos Model]
         Forecast --> |Adjustment| LLM[LLM Refinement]
     end
     
@@ -166,6 +168,20 @@ graph TD
 3.  **Infra & Tools (`src/tools/`, `src/utils/`)**:
     *   **Toolkits**: News, Stock, Sentiment, Search.
     *   **Storage**: SQLite for persistence, Vector DB for semantic search.
+
+---
+
+## 🧠 News-Aware Kronos Model
+One of the core innovations in SignalFlux is the integration of a **few-shot news-projection layer** into the Kronos foundation model. This allows the system to not just predict based on historical prices, but to understand the quantitative impact of news events.
+
+<div align="center">
+  <img src="assets/news_bias.png" alt="News Bias Injection Mechanism" width="600">
+  <p><i>The news-aware projection mechanism: mapping semantic embeddings to the model's latent space.</i></p>
+</div>
+
+- **Projection Layer**: A lightweight linear layer that maps 384-dimensional SentenceTransformer embeddings to the 512-dimensional hidden state of Kronos.
+- **Global Shift**: The projected news bias is added to the hidden representation across all time steps, shifting the model's "latent expectation" before final prediction.
+- **Training**: Fine-tuned on a synthetic dataset of historical news-shock pairs verified by LLM reasoning.
 
 ---
 
@@ -205,17 +221,20 @@ Derived from our internal plans:
 
 ### Phase 1: Enhanced Visualization & Signals
 - [x] **Semantic Visualization**: Relation topology graphs and ISQ Radar charts.
+- [x] **Interactive Diagrams**: Logic transmission chains using **Draw.io** (MxGraph) for editable, professional layouts.
 - [x] **Signal Pipeline**: Quantitative scoring tunnel based on ISQ templates.
-- [ ] **Polymarket Integration**: Add prediction market data as a signal source.
 
 ### Phase 2: Advanced Inference
-- [x] **Time-Series Integration**: Integrated [Kronos](https://github.com/shiyu-coder/Kronos) for predictive K-line modeling.
+- [x] **Time-Series Integration**: Integrated **Kronos** for predictive K-line modeling.
+- [x] **News-Aware Projection**: Trained linear layer for injecting semantic news impact into the model's latent space.
 - [x] **AI Forecasting**: Multi-agent adjustment of historical predictions based on news context.
 
 ### Phase 3: Infrastructure & Expansion
 - [x] **Hybrid Search**: Reciprocal Rank Fusion of BM25 and Vector Search.
 - [ ] **US Market Support**: Add Alpha Vantage/Yahoo Finance adaptors.
 - [ ] **LangGraph Migration**: Explore graph-based state management for complex loops.
+- [ ] **Polymarket Integration**: Add prediction market data as a signal source.
+
 
 ---
 
