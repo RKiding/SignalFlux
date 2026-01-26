@@ -116,7 +116,7 @@ class SignalFluxWorkflow:
             return news_list
 
     # 可用的新闻源（按类别）
-    FINANCIAL_SOURCES = ["cls", "wallstreetcn", "xueqiu", "eastmoney", "yicai"]
+    FINANCIAL_SOURCES = ["cls", "wallstreetcn", "xueqiu"]
     SOCIAL_SOURCES = ["weibo", "zhihu", "baidu", "toutiao", "douyin"]
     TECH_SOURCES = ["36kr", "ithome", "v2ex", "juejin", "hackernews"]
     ALL_SOURCES = FINANCIAL_SOURCES + SOCIAL_SOURCES + TECH_SOURCES

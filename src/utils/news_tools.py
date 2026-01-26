@@ -17,8 +17,6 @@ class NewsNowTools:
         "cls": "财联社",
         "wallstreetcn": "华尔街见闻",
         "xueqiu": "雪球热榜",
-        "eastmoney": "东方财富",
-        "yicai": "第一财经",
         # 综合/社交
         "weibo": "微博热搜",
         "zhihu": "知乎热榜",

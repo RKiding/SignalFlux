@@ -40,8 +40,7 @@ class NewsToolkit(Toolkit):
         
         Args:
             source_id: 新闻源标识符。可选值按类别:
-                **金融类**: "cls" (财联社), "wallstreetcn" (华尔街见闻),
-                           "xueqiu" (雪球), "eastmoney" (东方财富), "yicai" (第一财经)
+                **金融类**: "cls" (财联社), "wallstreetcn" (华尔街见闻), "xueqiu" (雪球)
                 **综合类**: "weibo" (微博热搜), "zhihu" (知乎热榜), "baidu" (百度热搜),
                            "toutiao" (今日头条), "douyin" (抖音), "thepaper" (澎湃新闻)
                 **科技类**: "36kr" (36氪), "ithome" (IT之家), "v2ex", "juejin" (掘金),
